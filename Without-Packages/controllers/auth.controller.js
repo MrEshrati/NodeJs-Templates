@@ -5,16 +5,16 @@ const validatePassword = require("../validators/passwordValidator");
 const bcrypt = require("bcrypt");
 
 exports.SignUp = async (req, res, next) => {
-  const email = req.body.email.trim().toLowerCase();
-  const password = req.body.password;
-
   try {
-    if (!email || !password) {
+    if (!req.body.email || !req.body.password) {
       throw new AppError("validation_error", 400, "Validation failed.", {
         email: ["This field is required."],
         password: ["This field is required."],
       });
     }
+
+    const email = req.body.email.trim().toLowerCase();
+    const password = req.body.password;
 
     if (!validateEmail(email)) {
       throw new AppError("validation_error", 400, "Validation failed.", {
