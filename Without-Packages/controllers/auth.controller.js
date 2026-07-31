@@ -6,15 +6,13 @@ const bcrypt = require("bcrypt");
 
 exports.SignUp = async (req, res, next) => {
   const email = req.body.email.trim().toLowerCase();
-  const password1 = req.body.password1;
-  const password2 = req.body.password2;
+  const password = req.body.password;
 
   try {
-    if (!email || !password1 || !password2) {
+    if (!email || !password) {
       throw new AppError("validation_error", 400, "Validation failed.", {
         email: ["This field is required."],
-        password1: ["This field is required."],
-        password2: ["This field is required."],
+        password: ["This field is required."],
       });
     }
 
@@ -24,26 +22,20 @@ exports.SignUp = async (req, res, next) => {
       });
     }
 
-    const user = await User.findOne({ email: email });
-    if (user && user.EmailVerified) {
+    const user_query = await User.findOne({ email: email });
+    if (user_query) {
       throw new AppError("validation_error", 400, "Validation failed.", {
         email: ["User is already registered with this e-mail address."],
       });
     }
 
-    if (!validatePassword(password1)) {
+    if (!validatePassword(password)) {
       throw new AppError("validation_error", 400, "Validation failed.", {
-        password1: ["Enter a valid password."],
+        password: ["Enter a valid password."],
       });
     }
 
-    if (password1 !== password2) {
-      throw new AppError("validation_error", 400, "Validation failed.", {
-        non_field_errors: ["The two password fields didn't match."],
-      });
-    }
-
-    const hashedPassword = await bcrypt.hash(password1, 12);
+    const hashedPassword = await bcrypt.hash(password, 12);
     const user = new User({
       email: email,
       password: hashedPassword,
@@ -59,3 +51,8 @@ exports.SignUp = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.verifyEmail = async (req,res,next) => {
+
+  
+}
