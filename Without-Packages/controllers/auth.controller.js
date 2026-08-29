@@ -10,26 +10,20 @@ exports.SignUp = async (req, res, next) => {
     const rawEmail = req.body.email;
     const password = req.body.password;
 
-    if (!rawEmail) {
+    if (!rawEmail || !password) {
       fields.email = [
         {
           code: "required",
           message: "This field is required.",
         },
       ];
-      throw new AppError("Validation failed.", 400, "validation_error", {
-        fields,
-      });
-    } else if (!password) {
       fields.password = [
         {
           code: "required",
           message: "This field is required.",
         },
       ];
-      throw new AppError("Validation failed.", 400, "validation_error", {
-        fields,
-      });
+      throw new AppError("Validation failed.", 400, "validation_error", fields);
     }
 
     if (typeof rawEmail !== "string") {
@@ -39,9 +33,7 @@ exports.SignUp = async (req, res, next) => {
           message: "Enter a valid email address.",
         },
       ];
-      throw new AppError("Validation failed.", 400, "validation_error", {
-        fields,
-      });
+      throw new AppError("Validation failed.", 400, "validation_error", fields);
     }
 
     const email = rawEmail.trim().toLowerCase();
@@ -52,9 +44,7 @@ exports.SignUp = async (req, res, next) => {
           message: "Enter a valid email address.",
         },
       ];
-      throw new AppError("Validation failed.", 400, "validation_error", {
-        fields,
-      });
+      throw new AppError("Validation failed.", 400, "validation_error", fields);
     }
 
     const user_query = await User.findOne({ email: email });
@@ -65,9 +55,7 @@ exports.SignUp = async (req, res, next) => {
           message: "User is already registered with this e-mail address.",
         },
       ];
-      throw new AppError("Validation failed.", 400, "validation_error", {
-        fields,
-      });
+      throw new AppError("Validation failed.", 201, "validation_error", fields);
     }
 
     if (!validatePassword(password)) {
@@ -77,9 +65,7 @@ exports.SignUp = async (req, res, next) => {
           message: "Enter a valid password.",
         },
       ];
-      throw new AppError("Validation failed.", 400, "validation_error", {
-        fields,
-      });
+      throw new AppError("Validation failed.", 400, "validation_error", fields);
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
