@@ -6,32 +6,79 @@ const bcrypt = require("bcrypt");
 
 exports.SignUp = async (req, res, next) => {
   try {
-    if (!req.body.email || !req.body.password) {
+    const fields = {};
+    const rawEmail = req.body.email;
+    const password = req.body.password;
+
+    if (!rawEmail) {
+      fields.email = [
+        {
+          code: "required",
+          message: "This field is required.",
+        },
+      ];
       throw new AppError("validation_error", 400, "Validation failed.", {
-        email: ["This field is required."],
-        password: ["This field is required."],
+        fields,
+      });
+    } else if (!password) {
+      fields.password = [
+        {
+          code: "required",
+          message: "This field is required.",
+        },
+      ];
+      throw new AppError("validation_error", 400, "Validation failed.", {
+        fields,
       });
     }
 
-    const email = req.body.email.trim().toLowerCase();
-    const password = req.body.password;
-
-    if (!validateEmail(email)) {
+    if (typeof rawEmail !== "string") {
+      fields.email = [
+        {
+          code: "invalid",
+          message: "Enter a valid email address.",
+        },
+      ];
       throw new AppError("validation_error", 400, "Validation failed.", {
-        email: ["Enter a valid email address."],
+        fields,
+      });
+    }
+
+    const email = rawEmail.trim().toLowerCase();
+    if (!validateEmail(email)) {
+      fields.email = [
+        {
+          code: "invalid",
+          message: "Enter a valid email address.",
+        },
+      ];
+      throw new AppError("validation_error", 400, "Validation failed.", {
+        fields,
       });
     }
 
     const user_query = await User.findOne({ email: email });
     if (user_query) {
+      fields.email = [
+        {
+          code: "duplicate",
+          message: "User is already registered with this e-mail address.",
+        },
+      ];
       throw new AppError("validation_error", 400, "Validation failed.", {
-        email: ["User is already registered with this e-mail address."],
+        fields,
       });
     }
 
     if (!validatePassword(password)) {
+      fields.password = [
+        {
+          code: "invalid",
+          message: "Enter a valid password.",
+        },
+      ];
       throw new AppError("validation_error", 400, "Validation failed.", {
-        password: ["Enter a valid password."],
+        fields,
       });
     }
 
@@ -42,7 +89,7 @@ exports.SignUp = async (req, res, next) => {
       EmailVerified: false,
     });
 
-    await user.save();   
+    await user.save();
 
     res.status(201).json({
       detail: "Verification e-mail sent.",
@@ -52,7 +99,4 @@ exports.SignUp = async (req, res, next) => {
   }
 };
 
-exports.verifyEmail = async (req,res,next) => {
-
-  
-}
+exports.verifyEmail = async (req, res, next) => {};
