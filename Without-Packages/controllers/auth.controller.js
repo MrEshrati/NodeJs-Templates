@@ -17,7 +17,7 @@ exports.SignUp = async (req, res, next) => {
           message: "This field is required.",
         },
       ];
-      throw new AppError("validation_error", 400, "Validation failed.", {
+      throw new AppError("Validation failed.", 400, "validation_error", {
         fields,
       });
     } else if (!password) {
@@ -27,7 +27,7 @@ exports.SignUp = async (req, res, next) => {
           message: "This field is required.",
         },
       ];
-      throw new AppError("validation_error", 400, "Validation failed.", {
+      throw new AppError("Validation failed.", 400, "validation_error", {
         fields,
       });
     }
@@ -39,7 +39,7 @@ exports.SignUp = async (req, res, next) => {
           message: "Enter a valid email address.",
         },
       ];
-      throw new AppError("validation_error", 400, "Validation failed.", {
+      throw new AppError("Validation failed.", 400, "validation_error", {
         fields,
       });
     }
@@ -52,7 +52,7 @@ exports.SignUp = async (req, res, next) => {
           message: "Enter a valid email address.",
         },
       ];
-      throw new AppError("validation_error", 400, "Validation failed.", {
+      throw new AppError("Validation failed.", 400, "validation_error", {
         fields,
       });
     }
@@ -65,7 +65,7 @@ exports.SignUp = async (req, res, next) => {
           message: "User is already registered with this e-mail address.",
         },
       ];
-      throw new AppError("validation_error", 400, "Validation failed.", {
+      throw new AppError("Validation failed.", 400, "validation_error", {
         fields,
       });
     }
@@ -77,7 +77,7 @@ exports.SignUp = async (req, res, next) => {
           message: "Enter a valid password.",
         },
       ];
-      throw new AppError("validation_error", 400, "Validation failed.", {
+      throw new AppError("Validation failed.", 400, "validation_error", {
         fields,
       });
     }
