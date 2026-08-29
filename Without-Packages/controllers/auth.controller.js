@@ -7,75 +7,88 @@ const bcrypt = require("bcrypt");
 exports.SignUp = async (req, res, next) => {
   try {
     const fields = {};
-    const rawEmail = req.body.email;
-    const password = req.body.password;
+    const body = req.body || {};
+    const rawEmail = body.email;
+    const password = body.password;
+    let email;
 
-    if (!rawEmail || !password) {
+    const emailMissing =
+      rawEmail === undefined || rawEmail === null || rawEmail === "";
+
+    if (emailMissing) {
       fields.email = [
         {
           code: "required",
           message: "This field is required.",
         },
       ];
+    } else if (typeof rawEmail !== "string") {
+      fields.email = [
+        {
+          code: "invalid",
+          message: "Enter a valid email address.",
+        },
+      ];
+    } else {
+      email = rawEmail.trim().toLowerCase();
+
+      if (!validateEmail(email)) {
+        fields.email = [
+          {
+            code: "invalid",
+            message: "Enter a valid email address.",
+          },
+        ];
+      }
+    }
+
+    const passwordMissing =
+      password === undefined || password === null || password === "";
+
+    if (passwordMissing) {
       fields.password = [
         {
           code: "required",
           message: "This field is required.",
         },
       ];
-      throw new AppError("Validation failed.", 400, "validation_error", fields);
-    }
-
-    if (typeof rawEmail !== "string") {
-      fields.email = [
-        {
-          code: "invalid",
-          message: "Enter a valid email address.",
-        },
-      ];
-      throw new AppError("Validation failed.", 400, "validation_error", fields);
-    }
-
-    const email = rawEmail.trim().toLowerCase();
-    if (!validateEmail(email)) {
-      fields.email = [
-        {
-          code: "invalid",
-          message: "Enter a valid email address.",
-        },
-      ];
-      throw new AppError("Validation failed.", 400, "validation_error", fields);
-    }
-
-    const user_query = await User.findOne({ email: email });
-    if (user_query) {
-      fields.email = [
-        {
-          code: "duplicate",
-          message: "User is already registered with this e-mail address.",
-        },
-      ];
-      throw new AppError("Validation failed.", 201, "validation_error", fields);
-    }
-
-    if (!validatePassword(password)) {
+    } else if (typeof password !== "string") {
       fields.password = [
         {
           code: "invalid",
           message: "Enter a valid password.",
         },
       ];
+    } else {
+      const passwordErrors = validatePassword(password);
+
+      if (passwordErrors.length > 0) {
+        fields.password = passwordErrors;
+      }
+    }
+
+    if (Object.keys(fields).length > 0) {
       throw new AppError("Validation failed.", 400, "validation_error", fields);
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12);
-    const user = new User({
-      email: email,
-      password: hashedPassword,
-      EmailVerified: false,
-    });
+    const existingUser = await User.findOne({ email: email });
 
-    await user.save();
+    if (!existingUser) {
+      const hashedPassword = await bcrypt.hash(password, 12);
+      const user = new User({
+        email: email,
+        password: hashedPassword,
+        emailVerified: false,
+      });
+
+      try {
+        await user.save();
+      } catch (error) {
+        if (error.code !== 11000) {
+          throw error;
+        }
+      }
+    }
 
     res.status(201).json({
       detail: "Verification e-mail sent.",
