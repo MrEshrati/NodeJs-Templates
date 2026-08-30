@@ -1,11 +1,16 @@
 const User = require("../models/user.model");
 const bcrypt = require("bcrypt");
+const {
+  issueEmailVerificationToken,
+} = require("../services/emailVerification.service");
+
+const { sendVerificationEmail } = require("../services/email.service");
 
 exports.SignUp = async (req, res, next) => {
   try {
     const { email, password } = req.validatedBody;
 
-    const existingUser = await User.findOne({ email: email });
+    let existingUser = await User.findOne({ email: email });
 
     if (!existingUser) {
       const hashedPassword = await bcrypt.hash(password, 12);
@@ -16,11 +21,29 @@ exports.SignUp = async (req, res, next) => {
       });
 
       try {
-        await user.save();
+        existingUser = await user.save();
       } catch (error) {
         if (error.code !== 11000) {
           throw error;
         }
+
+        existingUser = await User.findOne({ email });
+
+        if (!existingUser) {
+          throw error;
+        }
+
+      }
+    }
+
+    if (!existingUser.emailVerified) {
+      const { token } = await issueEmailVerificationToken(existingUser._id);
+      const { previewUrl } = await sendVerificationEmail(
+        existingUser.email,
+        token,
+      );
+      if (previewUrl) {
+        console.log(`Verification email preview: ${previewUrl}`);
       }
     }
 
