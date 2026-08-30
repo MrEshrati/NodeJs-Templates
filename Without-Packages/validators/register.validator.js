@@ -1,5 +1,5 @@
-const validateEmail = require("./emailValidator");
-const validatePassword = require("./passwordValidator");
+const validateEmail = require("./email.validator");
+const validatePassword = require("./password.validator");
 
 function validateRegistration(body = {}) {
   const fields = {};
