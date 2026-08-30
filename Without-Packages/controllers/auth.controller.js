@@ -4,6 +4,7 @@ const AppError = require("../errors/AppError");
 const {
   issueEmailVerificationToken,
   confirmEmailAddress,
+  resendEmailVerification,
 } = require("../services/emailVerification.service");
 const {
   sendVerificationEmail,
@@ -80,6 +81,23 @@ exports.verifyEmail = async (req, res, next) => {
         400,
         "validation_error",
       );
+    }
+
+    res.status(200).json({
+      detail: "ok",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.resendVerification = async (req, res, next) => {
+  try {
+    const { email } = req.validatedBody;
+    const emailResult = await resendEmailVerification(email);
+
+    if (emailResult.previewUrl) {
+      console.log(`Email preview: ${emailResult.previewUrl}`);
     }
 
     res.status(200).json({
