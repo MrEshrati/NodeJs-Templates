@@ -73,7 +73,47 @@ async function sendVerificationEmail(email, token) {
   };
 }
 
+async function sendAccountExistsEmail(email) {
+  if (!process.env.FRONTEND_URL) {
+    throw new Error("FRONTEND_URL environment variable is required.");
+  }
+
+  const loginUrl = new URL("/login", process.env.FRONTEND_URL).toString();
+  const forgotPasswordUrl = new URL(
+    "/forgot-password",
+    process.env.FRONTEND_URL,
+  ).toString();
+  const transporter = await getTestTransporter();
+  const info = await transporter.sendMail({
+    to: email,
+    subject: "An account already exists for this email address",
+    text: [
+      "Someone attempted to register using this email address.",
+      "",
+      "An account already exists for this address.",
+      `Log in: ${loginUrl}`,
+      `Forgot your password: ${forgotPasswordUrl}`,
+      "",
+      "If you did not attempt to register, you can ignore this email.",
+    ].join("\n"),
+    html: `
+      <h1>An account already exists</h1>
+      <p>Someone attempted to register using this email address.</p>
+      <p>An account already exists for this address.</p>
+      <p><a href="${loginUrl}">Log in</a></p>
+      <p><a href="${forgotPasswordUrl}">Forgot your password?</a></p>
+      <p>If you did not attempt to register, you can ignore this email.</p>
+    `,
+  });
+
+  return {
+    messageId: info.messageId,
+    previewUrl: nodemailer.getTestMessageUrl(info),
+  };
+}
+
 module.exports = {
   getTestTransporter,
   sendVerificationEmail,
+  sendAccountExistsEmail,
 };

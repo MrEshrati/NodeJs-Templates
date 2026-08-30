@@ -4,7 +4,10 @@ const {
   issueEmailVerificationToken,
 } = require("../services/emailVerification.service");
 
-const { sendVerificationEmail } = require("../services/email.service");
+const {
+  sendVerificationEmail,
+  sendAccountExistsEmail,
+} = require("../services/email.service");
 
 exports.SignUp = async (req, res, next) => {
   try {
@@ -32,19 +35,20 @@ exports.SignUp = async (req, res, next) => {
         if (!existingUser) {
           throw error;
         }
-
       }
     }
 
+    let emailResult;
+
     if (!existingUser.emailVerified) {
       const { token } = await issueEmailVerificationToken(existingUser._id);
-      const { previewUrl } = await sendVerificationEmail(
-        existingUser.email,
-        token,
-      );
-      if (previewUrl) {
-        console.log(`Verification email preview: ${previewUrl}`);
-      }
+      emailResult = await sendVerificationEmail(existingUser.email, token);
+    } else {
+      emailResult = await sendAccountExistsEmail(existingUser.email);
+    }
+
+    if (emailResult.previewUrl) {
+      console.log(`Email preview: ${emailResult.previewUrl}`);
     }
 
     res.status(201).json({
