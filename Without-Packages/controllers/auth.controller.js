@@ -10,6 +10,13 @@ const {
   sendVerificationEmail,
   sendAccountExistsEmail,
 } = require("../services/email.service");
+const { authenticateUser } = require("../services/login.service");
+
+const LOGIN_ERROR_MESSAGES = {
+  invalid_credentials: "Unable to log in with provided credentials.",
+  account_disabled: "User account is disabled.",
+  email_not_verified: "E-mail is not verified.",
+};
 
 exports.SignUp = async (req, res, next) => {
   try {
@@ -103,6 +110,34 @@ exports.resendVerification = async (req, res, next) => {
     res.status(200).json({
       detail: "ok",
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.login = async (req, res, next) => {
+  try {
+    const { email, password } = req.validatedBody;
+    const result = await authenticateUser(email, password);
+
+    const errorMessage = LOGIN_ERROR_MESSAGES[result.status];
+
+    if (errorMessage) {
+      throw new AppError("Validation failed.", 400, "validation_error", {
+        non_field_errors: [
+          {
+            code: "invalid",
+            message: errorMessage,
+          },
+        ],
+      });
+    }
+
+    if (result.status !== "authenticated") {
+      throw new Error("Unexpected login service status.");
+    }
+
+    return res.status(200).json(result.tokens);
   } catch (error) {
     next(error);
   }
