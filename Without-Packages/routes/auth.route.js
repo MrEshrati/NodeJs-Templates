@@ -5,6 +5,7 @@ const validateRequest = require("../middlewares/validation.middleware");
 const validateRegistration = require("../validators/register.validator");
 const validateVerifyEmail = require("../validators/verifyEmail.validator");
 const validateResendVerifyEmail = require("../validators/resendVerification.validator");
+const validateLogin = require("../validators/login.validator");
 
 router.post(
   "/register",
@@ -13,7 +14,7 @@ router.post(
 );
 
 router.post(
-  "/verify-email",
+  "/confirm -email",
   validateRequest(validateVerifyEmail),
   authController.verifyEmail,
 );
@@ -23,5 +24,7 @@ router.post(
   validateRequest(validateResendVerifyEmail),
   authController.resendVerification,
 );
+
+router.post("/login", validateRequest(validateLogin), authController.login);
 
 module.exports = router;
