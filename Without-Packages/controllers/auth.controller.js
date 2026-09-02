@@ -120,6 +120,14 @@ exports.login = async (req, res, next) => {
     const { email, password } = req.validatedBody;
     const result = await authenticateUser(email, password);
 
+    if (result.status === "login_throttled") {
+      throw new AppError(
+        "Too many failed login attempts. Try again later.",
+        429,
+        "throttled",
+      );
+    }
+
     const errorMessage = LOGIN_ERROR_MESSAGES[result.status];
 
     if (errorMessage) {
