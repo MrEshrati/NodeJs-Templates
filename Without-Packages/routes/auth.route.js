@@ -6,6 +6,7 @@ const validateRegistration = require("../validators/register.validator");
 const validateVerifyEmail = require("../validators/verifyEmail.validator");
 const validateResendVerifyEmail = require("../validators/resendVerification.validator");
 const validateLogin = require("../validators/login.validator");
+const validateRefreshToken = require("../validators/refreshToken.validator");
 
 router.post(
   "/register",
@@ -26,5 +27,11 @@ router.post(
 );
 
 router.post("/login", validateRequest(validateLogin), authController.login);
+
+router.post(
+  "/token/refresh",
+  validateRequest(validateRefreshToken),
+  authController.refreshToken,
+)
 
 module.exports = router;
