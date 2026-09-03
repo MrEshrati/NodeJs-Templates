@@ -15,7 +15,7 @@ router.post(
 );
 
 router.post(
-  "/confirm -email",
+  "/confirm-email",
   validateRequest(validateVerifyEmail),
   authController.verifyEmail,
 );
