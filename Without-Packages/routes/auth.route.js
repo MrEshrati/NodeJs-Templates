@@ -4,6 +4,30 @@ const authController = require("../controllers/auth.controller");
 const validateRequest = require("../middlewares/validation.middleware");
 const createRequestThrottle = require("../middlewares/requestThrottle.middleware");
 
+const registerRequestThrottle = createRequestThrottle({
+  scope: "token-register:v1",
+  maxRequests: 10,
+  windowMs: 60 * 60 * 1000,
+});
+
+const loginRequestThrottle = createRequestThrottle({
+  scope: "token-login:v1",
+  maxRequests: 10,
+  windowMs: 60 * 1000,
+});
+
+const verifyEmailRequestThrottle = createRequestThrottle({
+  scope: "token-verify-email:v1",
+  maxRequests: 10,
+  windowMs: 60 * 60 * 1000,
+});
+
+const resendVerificationRequestThrottle = createRequestThrottle({
+  scope: "token-resend-verification:v1",
+  maxRequests: 10,
+  windowMs: 60 * 60 * 1000,
+});
+
 const refreshRequestThrottle = createRequestThrottle({
   scope: "token-refresh:v1",
   maxRequests: 10,
@@ -24,23 +48,26 @@ const validateRefreshToken = require("../validators/refreshToken.validator");
 
 router.post(
   "/register",
+  registerRequestThrottle,
   validateRequest(validateRegistration),
   authController.SignUp,
 );
 
 router.post(
-  "/confirm-email",
+  "/verify-email",
+  verifyEmailRequestThrottle,
   validateRequest(validateVerifyEmail),
   authController.verifyEmail,
 );
 
 router.post(
   "/resend-verification",
+  resendVerificationRequestThrottle,
   validateRequest(validateResendVerifyEmail),
   authController.resendVerification,
 );
 
-router.post("/login", validateRequest(validateLogin), authController.login);
+router.post("/login", loginRequestThrottle, validateRequest(validateLogin), authController.login);
 
 router.post(
   "/token/refresh",
