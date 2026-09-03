@@ -2,6 +2,7 @@ const { verifyJwt } = require("../utils/jwt.utils");
 const { hashToken } = require("../utils/token.utils");
 const RefreshSession = require("../models/refreshSession.model");
 const User = require("../models/user.model");
+const { createTokenPair } = require("./token.service");
 
 const inspectRefreshToken = async (refresh) => {
   const payload = await verifyJwt(refresh, "refresh");
@@ -38,4 +39,48 @@ const inspectRefreshToken = async (refresh) => {
   };
 };
 
-module.exports = { inspectRefreshToken };
+const rotateRefreshToken = async (refresh) => {
+  const result = await inspectRefreshToken(refresh);
+  if (result.status !== "ready") {
+    return result;
+  }
+
+  const session = result.session;
+  const { tokens, sessionData } = createTokenPair(session.user);
+  const refreshUpdate = await RefreshSession.findOneAndUpdate(
+    {
+      _id: session._id,
+      user: session.user,
+      jtiHash: session.jtiHash,
+      revokedAt: null,
+      $expr: {
+        $gt: ["$expiresAt", "$$NOW"],
+      },
+    },
+    {
+      $set: {
+        jtiHash: sessionData.jtiHash,
+        expiresAt: sessionData.expiresAt,
+      },
+    },
+    {
+      returnDocument: "after",
+      runValidators: true,
+      upsert: false,
+    },
+  );
+
+  if (!refreshUpdate) {
+    return { status: "token_not_valid" };
+  }
+
+  return {
+    status: "refreshed",
+    tokens,
+  };
+};
+
+module.exports = {
+  inspectRefreshToken,
+  rotateRefreshToken,
+};
