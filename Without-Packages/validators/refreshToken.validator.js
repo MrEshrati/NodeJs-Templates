@@ -4,15 +4,15 @@ const validateRefreshToken = (body = {}) => {
   const refresh = requestBody.refresh;
 
   const refreshMissing =
-    refresh === undefined ||
-    refresh === null ||
-    refresh === "";
+    refresh === undefined || refresh === null || refresh === "";
 
   if (refreshMissing) {
-    fields.refresh = [{
-      code: "required",
-      message: "This field is required.",
-    }];
+    fields.refresh = [
+      {
+        code: "required",
+        message: "This field is required.",
+      },
+    ];
   }
 
   return {
@@ -20,5 +20,7 @@ const validateRefreshToken = (body = {}) => {
     fields,
   };
 };
+
+
 
 module.exports = validateRefreshToken;
