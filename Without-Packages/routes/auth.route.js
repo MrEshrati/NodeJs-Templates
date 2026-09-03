@@ -2,6 +2,14 @@ const express = require("express");
 const router = express.Router();
 const authController = require("../controllers/auth.controller");
 const validateRequest = require("../middlewares/validation.middleware");
+const createRequestThrottle = require("../middlewares/requestThrottle.middleware");
+
+const refreshRequestThrottle = createRequestThrottle({
+  scope: "token-refresh:v1",
+  maxRequests: 10,
+  windowMs: 60 * 1000,
+});
+
 const validateRegistration = require("../validators/register.validator");
 const validateVerifyEmail = require("../validators/verifyEmail.validator");
 const validateResendVerifyEmail = require("../validators/resendVerification.validator");
@@ -30,6 +38,7 @@ router.post("/login", validateRequest(validateLogin), authController.login);
 
 router.post(
   "/token/refresh",
+  refreshRequestThrottle,
   validateRequest(validateRefreshToken),
   authController.refreshToken,
 )
