@@ -12,6 +12,7 @@ const {
 } = require("../services/email.service");
 const { authenticateUser } = require("../services/login.service");
 const { rotateRefreshToken } = require("../services/refreshToken.service");
+const { revokeRefreshToken } = require("../services/logout.service");
 
 const LOGIN_ERROR_MESSAGES = {
   invalid_credentials: "Unable to log in with provided credentials.",
@@ -21,6 +22,10 @@ const LOGIN_ERROR_MESSAGES = {
 const REFRESH_TOKEN_ERROR_MESSAGES = {
   token_not_valid: "Token is blacklisted",
   no_active_account: "No active account found for the given token.",
+};
+const LOGOUT_ERROR_MESSAGES = {
+  refresh_missing: "Refresh token was not included in request data.",
+  token_not_valid: "Token is blacklisted",
 };
 
 exports.SignUp = async (req, res, next) => {
@@ -171,6 +176,27 @@ exports.refreshToken = async (req, res, next) => {
     }
 
     return res.status(200).json(result.tokens);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.logout = async (req, res, next) => {
+  try {
+    const refresh = req.body?.refresh;
+    const result = await revokeRefreshToken(refresh);
+    const errorMessage = LOGOUT_ERROR_MESSAGES[result.status];
+    if (errorMessage) {
+      throw new AppError(errorMessage, 401, "token_not_valid");
+    }
+
+    if (result.status !== "logged_out") {
+      throw new Error("Unexpected logout service status.");
+    }
+
+    return res.status(200).json({
+      detail: "Successfully logged out.",
+    });
   } catch (error) {
     next(error);
   }
