@@ -10,6 +10,12 @@ const refreshRequestThrottle = createRequestThrottle({
   windowMs: 60 * 1000,
 });
 
+const logoutRequestThrottle = createRequestThrottle({
+  scope: "logout:v1",
+  maxRequests: 10,
+  windowMs: 60 * 1000,
+});
+
 const validateRegistration = require("../validators/register.validator");
 const validateVerifyEmail = require("../validators/verifyEmail.validator");
 const validateResendVerifyEmail = require("../validators/resendVerification.validator");
@@ -41,6 +47,8 @@ router.post(
   refreshRequestThrottle,
   validateRequest(validateRefreshToken),
   authController.refreshToken,
-)
+);
+
+router.post("/logout", logoutRequestThrottle, authController.logout);
 
 module.exports = router;
