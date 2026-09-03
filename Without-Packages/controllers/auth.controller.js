@@ -11,11 +11,16 @@ const {
   sendAccountExistsEmail,
 } = require("../services/email.service");
 const { authenticateUser } = require("../services/login.service");
+const { rotateRefreshToken } = require("../services/refreshToken.service");
 
 const LOGIN_ERROR_MESSAGES = {
   invalid_credentials: "Unable to log in with provided credentials.",
   account_disabled: "User account is disabled.",
   email_not_verified: "E-mail is not verified.",
+};
+const REFRESH_TOKEN_ERROR_MESSAGES = {
+  token_not_valid: "Token is blacklisted",
+  no_active_account: "No active account found for the given token.",
 };
 
 exports.SignUp = async (req, res, next) => {
@@ -143,6 +148,26 @@ exports.login = async (req, res, next) => {
 
     if (result.status !== "authenticated") {
       throw new Error("Unexpected login service status.");
+    }
+
+    return res.status(200).json(result.tokens);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.refreshToken = async (req, res, next) => {
+  try {
+    const { refresh } = req.validatedBody;
+    const result = await rotateRefreshToken(refresh);
+    const errorMessage = REFRESH_TOKEN_ERROR_MESSAGES[result.status];
+
+    if (errorMessage) {
+      throw new AppError(errorMessage, 401, result.status);
+    }
+
+    if (result.status !== "refreshed") {
+      throw new Error("Unexpected refresh token service status.");
     }
 
     return res.status(200).json(result.tokens);
