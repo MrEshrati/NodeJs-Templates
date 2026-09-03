@@ -6,6 +6,16 @@ const ACCESS_TOKEN_TTL_SECONDS = 10 * 60;
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 const issueTokenPair = async (userId) => {
+  const { tokens, sessionData } = createTokenPair(userId);
+  await refreshSession.create({
+    user: userId,
+    ...sessionData,
+  });
+
+  return tokens;
+};
+
+const createTokenPair = (userId) => {
   const accessResult = createJwt({
     userId,
     tokenType: "access",
@@ -19,18 +29,20 @@ const issueTokenPair = async (userId) => {
   });
 
   const jtiHash = hashToken(refreshResult.jti);
-  await refreshSession.create({
-    user: userId,
-    jtiHash,
-    expiresAt: refreshResult.expiresAt,
-  });
 
   return {
-    access: accessResult.token,
-    refresh: refreshResult.token,
+    tokens: {
+      access: accessResult.token,
+      refresh: refreshResult.token,
+    },
+    sessionData: {
+      jtiHash,
+      expiresAt: refreshResult.expiresAt,
+    },
   };
 };
 
 module.exports = {
+  createTokenPair,
   issueTokenPair,
 };
