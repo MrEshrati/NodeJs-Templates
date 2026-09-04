@@ -1,8 +1,7 @@
 const OtpCode = require("../models/otpCode.model");
-const {
-  generateOtpCode,
-  hashOtpCode,
-} = require("../utils/otp.utils");
+const { generateOtpCode, hashOtpCode } = require("../utils/otp.utils");
+const User = require("../models/user.model");
+const { sendOtpCodeEmail } = require("./email.service");
 
 const OTP_CODE_TTL_MS = 10 * 60 * 1000;
 const OTP_SEND_COOLDOWN_MS = 60 * 1000;
@@ -67,7 +66,52 @@ const issueOtpCodeAfterCooldown = async (userId) => {
   }
 };
 
-module.exports = {
-  issueOtpCodeAfterCooldown,
+const requestOtpCode = async (email) => {
+  const user = await User.findOne({
+    email,
+    isActive: true,
+  })
+    .select("_id email")
+    .lean();
+
+  if (!user) {
+    return {
+      status: "accepted",
+      sent: false,
+      previewUrl: null,
+    };
+  }
+
+  const issuedCode = await issueOtpCodeAfterCooldown(user._id);
+  if (issuedCode === null) {
+    return {
+      status: "accepted",
+      sent: false,
+      previewUrl: null,
+    };
+  }
+
+  let emailResult;
+
+  try {
+    emailResult = await sendOtpCodeEmail(user.email, issuedCode.code);
+  } catch (error) {
+    await OtpCode.deleteOne({
+      user: user._id,
+      expiresAt: issuedCode.expiresAt,
+    });
+
+    throw error;
+  }
+  return {
+    status: "accepted",
+    sent: true,
+    messageId: emailResult.messageId,
+    previewUrl: emailResult.previewUrl,
+  };
 };
 
+module.exports = {
+  issueOtpCodeAfterCooldown,
+  requestOtpCode,
+};
