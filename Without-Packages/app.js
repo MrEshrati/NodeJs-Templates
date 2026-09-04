@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const app = express();
 const authRouter = require("./routes/auth.route");
+const profileRouter = require("./routes/profile.route");
 const errorHandler = require("./middlewares/errorHandler.middleware");
 require("dotenv").config();
 
@@ -19,6 +20,7 @@ app.use((req, res, next) => {
 });
 
 app.use("/auth", authRouter);
+app.use("/profile", profileRouter);
 
 app.use(errorHandler);
 
