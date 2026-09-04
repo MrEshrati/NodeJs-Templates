@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const authController = require("../controllers/auth.controller");
+const otpController = require("../controllers/otp.controller");
+
 const validateRequest = require("../middlewares/validation.middleware");
 const createRequestThrottle = require("../middlewares/requestThrottle.middleware");
 
@@ -39,12 +41,18 @@ const logoutRequestThrottle = createRequestThrottle({
   maxRequests: 10,
   windowMs: 60 * 1000,
 });
+const otpRequestThrottle = createRequestThrottle({
+  scope: "otp-request:v1",
+  maxRequests: 10,
+  windowMs: 60 * 60 * 1000,
+});
 
 const validateRegistration = require("../validators/register.validator");
 const validateVerifyEmail = require("../validators/verifyEmail.validator");
 const validateResendVerifyEmail = require("../validators/resendVerification.validator");
 const validateLogin = require("../validators/login.validator");
 const validateRefreshToken = require("../validators/refreshToken.validator");
+const validateOtpRequest = require("../validators/otpRequest.validator");
 
 router.post(
   "/register",
@@ -67,7 +75,12 @@ router.post(
   authController.resendVerification,
 );
 
-router.post("/login", loginRequestThrottle, validateRequest(validateLogin), authController.login);
+router.post(
+  "/login",
+  loginRequestThrottle,
+  validateRequest(validateLogin),
+  authController.login,
+);
 
 router.post(
   "/token/refresh",
@@ -77,5 +90,12 @@ router.post(
 );
 
 router.post("/logout", logoutRequestThrottle, authController.logout);
+
+router.post(
+  "/otp/request",
+  otpRequestThrottle,
+  validateRequest(validateOtpRequest),
+  otpController.requestOtp,
+);
 
 module.exports = router;
