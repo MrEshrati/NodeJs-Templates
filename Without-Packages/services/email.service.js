@@ -112,8 +112,42 @@ async function sendAccountExistsEmail(email) {
   };
 }
 
+async function sendOtpCodeEmail(email, code) {
+  if (typeof code !== "string" || !/^[0-9]{6}$/.test(code)) {
+    throw new TypeError("code must contain exactly six ASCII digits.");
+  }
+  const transporter = await getTestTransporter();
+  const info = await transporter.sendMail({
+    to: email,
+    subject: "Your one-time sign-in code",
+    text: [
+      "Welcome!",
+      "",
+      `Code: ${code}`,
+      "",
+      "This code expires in 10 minutes and can be used only once.",
+      "If you did not request this code, you can ignore this email.",
+    ].join("\n"),
+    html: `
+      <h1>Your one-time sign-in code</h1>
+      <p>Welcome!</p>
+      <p>
+        Code: ${code}
+      </p>
+      <p>This code expires in 10 minutes and can be used only once.</p>
+      <p>If you did not request this code, you can ignore this email.</p>
+    `,
+  });
+
+  return {
+    messageId: info.messageId,
+    previewUrl: nodemailer.getTestMessageUrl(info),
+  };
+}
+
 module.exports = {
   getTestTransporter,
   sendVerificationEmail,
   sendAccountExistsEmail,
+  sendOtpCodeEmail,
 };
