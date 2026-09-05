@@ -1,10 +1,15 @@
 const OtpCode = require("../models/otpCode.model");
-const { generateOtpCode, hashOtpCode } = require("../utils/otp.utils");
 const User = require("../models/user.model");
 const { sendOtpCodeEmail } = require("./email.service");
+const {
+  generateOtpCode,
+  hashOtpCode,
+  verifyOtpCodeHash,
+} = require("../utils/otp.utils");
 
 const OTP_CODE_TTL_MS = 10 * 60 * 1000;
 const OTP_SEND_COOLDOWN_MS = 60 * 1000;
+const OTP_MAX_FAILED_ATTEMPTS = 5;
 
 const createOtpCodeUpdate = (codeHash) => [
   {
@@ -113,7 +118,26 @@ const requestOtpCode = async (email) => {
   };
 };
 
+const inspectOtpCode = async (userId, code) => {
+  const otp = await OtpCode.findOne({
+    user: userId,
+    consumedAt: null,
+    failedAttempts: { $lt: OTP_MAX_FAILED_ATTEMPTS },
+    $expr: { $gt: ["$expiresAt", "$$NOW"] },
+  })
+    .select("_id user codeHash sentAt expiresAt")
+    .lean();
+
+  if (!otp) {
+    return { status: "otp_invalid" };
+  }
+
+  const codeMatches = verifyOtpCodeHash(userId, code, otp.codeHash);
+  return { status: "candidate", otp, codeMatches };
+};
+
 module.exports = {
   issueOtpCodeAfterCooldown,
   requestOtpCode,
+  inspectOtpCode,
 };
