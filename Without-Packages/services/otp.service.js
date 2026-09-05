@@ -1,6 +1,7 @@
 const OtpCode = require("../models/otpCode.model");
 const User = require("../models/user.model");
 const { sendOtpCodeEmail } = require("./email.service");
+const { issueTokenPair } = require("./token.service");
 const {
   generateOtpCode,
   hashOtpCode,
@@ -188,9 +189,50 @@ const consumeOtpCode = async (userId, code) => {
   };
 };
 
+const verifyOtpLogin = async (email, code) => {
+  if (typeof email === "string" && email.trim() !== "") {
+    const user = await User.findOne({
+      email,
+      isActive: true,
+    })
+      .select("_id email")
+      .lean();
+
+    if (!user) {
+      return {
+        status: "otp_invalid",
+      };
+    }
+
+    const result = await consumeOtpCode(user._id, code);
+    if (result.status !== "consumed") {
+      return { status: "otp_invalid" };
+    }
+
+    const updateUser = await User.updateOne(
+      { _id: user._id, email: user.email, isActive: true },
+      { $set: { emailVerified: true } },
+      { upsert: false, runValidators: true },
+    );
+
+    if (updateUser.matchedCount !== 1) {
+      return {
+        status: "otp_invalid",
+      };
+    }
+
+    const tokens = await issueTokenPair(user._id);
+    return { status: "authenticated", tokens };
+  }
+  return {
+    status: "otp_invalid",
+  };
+};
+
 module.exports = {
   issueOtpCodeAfterCooldown,
   requestOtpCode,
   inspectOtpCode,
   consumeOtpCode,
+  verifyOtpLogin,
 };
