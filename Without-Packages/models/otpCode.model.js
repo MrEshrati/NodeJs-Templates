@@ -31,6 +31,10 @@ const otpCodeSchema = new Schema(
       required: true,
       default: Date.now,
     },
+    consumedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

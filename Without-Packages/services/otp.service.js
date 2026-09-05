@@ -15,6 +15,8 @@ const createOtpCodeUpdate = (codeHash) => [
       failedAttempts: 0,
       createdAt: { $ifNull: ["$createdAt", "$$NOW"] },
       updatedAt: "$$NOW",
+      failedAttempts: 0,
+      consumedAt: null,
     },
   },
 ];
