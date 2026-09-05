@@ -136,8 +136,61 @@ const inspectOtpCode = async (userId, code) => {
   return { status: "candidate", otp, codeMatches };
 };
 
+const consumeOtpCode = async (userId, code) => {
+  const result = await inspectOtpCode(userId, code);
+  if (result.status !== "candidate") {
+    return { status: "otp_invalid" };
+  }
+
+  const otp = result.otp;
+  const codeMatches = result.codeMatches;
+  const filter = {
+    _id: otp._id,
+    user: userId,
+    codeHash: otp.codeHash,
+    sentAt: otp.sentAt,
+    expiresAt: otp.expiresAt,
+    consumedAt: null,
+    failedAttempts: { $lt: OTP_MAX_FAILED_ATTEMPTS },
+    $expr: { $gt: ["$expiresAt", "$$NOW"] },
+  };
+
+  if (!codeMatches) {
+    await OtpCode.updateOne(
+      filter,
+      {
+        $inc: { failedAttempts: 1 },
+        $currentDate: { updatedAt: true },
+      },
+      { upsert: false, timestamps: false },
+    );
+
+    return { status: "otp_invalid" };
+  }
+
+  const updateResult = await OtpCode.updateOne(
+    filter,
+    {
+      $currentDate: {
+        consumedAt: true,
+        updatedAt: true,
+      },
+    },
+    { upsert: false, timestamps: false },
+  );
+
+  if (updateResult.matchedCount === 1) {
+    return { status: "consumed" };
+  }
+
+  return {
+    status: "otp_invalid",
+  };
+};
+
 module.exports = {
   issueOtpCodeAfterCooldown,
   requestOtpCode,
   inspectOtpCode,
+  consumeOtpCode,
 };
