@@ -6,6 +6,14 @@ const otpController = require("../controllers/otp.controller");
 const validateRequest = require("../middlewares/validation.middleware");
 const createRequestThrottle = require("../middlewares/requestThrottle.middleware");
 
+const validateRegistration = require("../validators/register.validator");
+const validateVerifyEmail = require("../validators/verifyEmail.validator");
+const validateResendVerifyEmail = require("../validators/resendVerification.validator");
+const validateLogin = require("../validators/login.validator");
+const validateRefreshToken = require("../validators/refreshToken.validator");
+const validateOtpRequest = require("../validators/otpRequest.validator");
+const validateOtpVerify = require("../validators/otpVerify.validator");
+
 const registerRequestThrottle = createRequestThrottle({
   scope: "token-register:v1",
   maxRequests: 10,
@@ -41,18 +49,18 @@ const logoutRequestThrottle = createRequestThrottle({
   maxRequests: 10,
   windowMs: 60 * 1000,
 });
+
 const otpRequestThrottle = createRequestThrottle({
   scope: "otp-request:v1",
   maxRequests: 10,
   windowMs: 60 * 60 * 1000,
 });
 
-const validateRegistration = require("../validators/register.validator");
-const validateVerifyEmail = require("../validators/verifyEmail.validator");
-const validateResendVerifyEmail = require("../validators/resendVerification.validator");
-const validateLogin = require("../validators/login.validator");
-const validateRefreshToken = require("../validators/refreshToken.validator");
-const validateOtpRequest = require("../validators/otpRequest.validator");
+const otpVerifyThrottle = createRequestThrottle({
+  scope: "otp-verify:v1",
+  maxRequests: 10,
+  windowMs: 60 * 60 * 1000,
+});
 
 router.post(
   "/register",
@@ -96,6 +104,13 @@ router.post(
   otpRequestThrottle,
   validateRequest(validateOtpRequest),
   otpController.requestOtp,
+);
+
+router.post(
+  "/otp/verify",
+  otpVerifyThrottle,
+  validateRequest(validateOtpVerify),
+  otpController.verifyOtp,
 );
 
 module.exports = router;
