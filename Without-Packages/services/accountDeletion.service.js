@@ -87,4 +87,17 @@ const deactivateAccount = async (user) => {
   return { status: "deleted" };
 };
 
-module.exports = { reauthenticateForDeletion, deactivateAccount };
+const deleteAccount = async (userId, credentials = {}) => {
+  const reauthentication = await reauthenticateForDeletion(
+    userId,
+    credentials,
+  );
+
+  if (reauthentication.status !== "reauthenticated") {
+    return reauthentication;
+  }
+
+  return deactivateAccount(reauthentication.user);
+};
+
+module.exports = { reauthenticateForDeletion, deactivateAccount, deleteAccount };
