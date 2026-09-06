@@ -1,6 +1,7 @@
 const bcrypt = require("bcrypt");
 const User = require("../models/user.model");
 const { consumeOtpCode } = require("./otp.service");
+const RefreshSession = require("../models/refreshSession.model");
 
 const reauthenticateForDeletion = async (userId, credentials = {}) => {
   const user = await User.findOne({ _id: userId, isActive: true })
@@ -45,4 +46,45 @@ const reauthenticateForDeletion = async (userId, credentials = {}) => {
   return { status: "reauthenticated", user };
 };
 
-module.exports = { reauthenticateForDeletion };
+const deactivateAccount = async (user) => {
+  const userUpdate = await User.updateOne(
+    {
+      _id: user._id,
+      email: user.email,
+      password: user.password,
+      isActive: true,
+    },
+    {
+      $set: { isActive: false },
+    },
+    {
+      upsert: false,
+      runValidators: true,
+    },
+  );
+
+  if (userUpdate.matchedCount !== 1) {
+    return { status: "user_inactive" };
+  }
+
+  await RefreshSession.updateMany(
+    {
+      user: user._id,
+      revokedAt: null,
+    },
+    {
+      $currentDate: {
+        revokedAt: true,
+        updatedAt: true,
+      },
+    },
+    {
+      upsert: false,
+      timestamps: false,
+    },
+  );
+
+  return { status: "deleted" };
+};
+
+module.exports = { reauthenticateForDeletion, deactivateAccount };
