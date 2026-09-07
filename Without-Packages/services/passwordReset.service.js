@@ -120,7 +120,41 @@ const requestPasswordReset = async (email) => {
   };
 };
 
+const inspectPasswordResetToken = async (uid, token) => {
+  if (typeof uid !== "string" || !/^[a-fA-F0-9]{24}$/.test(uid.trim())) {
+    return { status: "uid_invalid" };
+  }
+
+  const user = await User.findOne({ _id: uid.trim(), isActive: true })
+    .select("_id email password")
+    .lean();
+
+  if (!user) {
+    return { status: "uid_invalid" };
+  }
+
+  if (typeof token !== "string" || token.trim() === "") {
+    return { status: "token_invalid" };
+  }
+
+  const hashedToken = tokenGenerator.hashToken(token);
+  const resetToken = await PasswordResetToken.findOne({
+    user: user._id,
+    tokenHash: hashedToken,
+    $expr: { $gt: ["$expiresAt", "$$NOW"] },
+  })
+    .select("_id user tokenHash expiresAt")
+    .lean();
+
+  if (!resetToken) {
+    return { status: "token_invalid" };
+  }
+
+  return { status: "candidate", user, resetToken };
+};
+
 module.exports = {
   issuePasswordResetTokenAfterCooldown,
   requestPasswordReset,
+  inspectPasswordResetToken,
 };
