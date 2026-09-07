@@ -181,10 +181,34 @@ const sendPasswordResetEmail = async (email, userId, token) => {
   };
 };
 
+const sendPasswordChangedEmail = async (email) => {
+  const transporter = await getTestTransporter();
+  const info = await transporter.sendMail({
+    to: email,
+    subject: "Your password was changed",
+    text: [
+      "Your account password was changed successfully.",
+      "",
+      "If you did not make this change, request a password reset immediately.",
+    ].join("\n"),
+    html: `
+      <h1>Your password was changed</h1>
+      <p>Your account password was changed successfully.</p>
+      <p>If you did not make this change, request a password reset immediately.</p>
+    `,
+  });
+
+  return {
+    messageId: info.messageId,
+    previewUrl: nodemailer.getTestMessageUrl(info),
+  };
+};
+
 module.exports = {
   getTestTransporter,
   sendVerificationEmail,
   sendAccountExistsEmail,
   sendOtpCodeEmail,
   sendPasswordResetEmail,
+  sendPasswordChangedEmail,
 };
