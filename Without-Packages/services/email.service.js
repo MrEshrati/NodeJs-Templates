@@ -145,9 +145,46 @@ async function sendOtpCodeEmail(email, code) {
   };
 }
 
+const sendPasswordResetEmail = async (email, userId, token) => {
+  if (!process.env.FRONTEND_URL) {
+    throw new Error("FRONTEND_URL environment variable is required.");
+  }
+
+  const resetPassLink = new URL(
+    `/reset-password?uid=${encodeURIComponent(userId)}&token=${encodeURIComponent(token)}`,
+    process.env.FRONTEND_URL,
+  ).toString();
+  const transporter = await getTestTransporter();
+  const info = await transporter.sendMail({
+    to: email,
+    subject: "Reset your password",
+    text: [
+      "Reset your password by opening this link:",
+      resetPassLink,
+      "",
+      "This link expires in 24 hours.",
+      "If you did not request a reset password link, you can ignore this email.",
+    ].join("\n"),
+    html: `
+      <h1>Reset your password</h1>
+      <p>
+        <a href="${resetPassLink}">Reset Password</a>
+      </p>
+      <p>This link expires in 24 hours.</p>
+      <p>If you did not request a reset password link, you can ignore this email.</p>
+    `,
+  });
+
+  return {
+    messageId: info.messageId,
+    previewUrl: nodemailer.getTestMessageUrl(info),
+  };
+};
+
 module.exports = {
   getTestTransporter,
   sendVerificationEmail,
   sendAccountExistsEmail,
   sendOtpCodeEmail,
+  sendPasswordResetEmail,
 };
