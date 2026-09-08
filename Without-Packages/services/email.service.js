@@ -240,6 +240,31 @@ const sendEmailChangeConfirmationEmail = async (newEmail, token) => {
   };
 };
 
+const sendEmailChangedEmail = async (oldEmail) => {
+  const transporter = await getTestTransporter();
+  const info = await transporter.sendMail({
+    to: oldEmail,
+    subject: "Your email address was changed",
+    text: [
+      "The login email address for your account was changed.",
+      "You will need to sign in again on your devices.",
+      "",
+      "If you did not authorize this change, take immediate action to secure your account.",
+    ].join("\n"),
+    html: `
+      <h1>Your email address was changed</h1>
+      <p>The login email address for your account was changed.</p>
+      <p>You will need to sign in again on your devices.</p>
+      <p>If you did not authorize this change, take immediate action to secure your account.</p>
+    `,
+  });
+
+  return {
+    messageId: info.messageId,
+    previewUrl: nodemailer.getTestMessageUrl(info),
+  };
+};
+
 module.exports = {
   getTestTransporter,
   sendVerificationEmail,
@@ -248,4 +273,5 @@ module.exports = {
   sendPasswordResetEmail,
   sendPasswordChangedEmail,
   sendEmailChangeConfirmationEmail,
+  sendEmailChangedEmail,
 };
