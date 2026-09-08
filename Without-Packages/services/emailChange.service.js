@@ -238,9 +238,33 @@ const requestEmailChange = async (
   };
 };
 
+const inspectEmailChangeToken = async (key) => {
+  if (typeof key !== "string" || key.trim() === "") {
+    return { status: "key_invalid" };
+  }
+
+  const tokenHash = tokenGenerator.hashToken(key.trim());
+  const emailChangeToken = await EmailChangeToken.findOne({
+    tokenHash,
+    $expr: { $gt: ["$expiresAt", "$$NOW"] },
+  })
+    .select("_id user oldEmail newEmail tokenHash expiresAt")
+    .lean();
+
+  if (!emailChangeToken) {
+    return { status: "key_invalid" };
+  }
+
+  return {
+    status: "candidate",
+    emailChangeToken,
+  };
+};
+
 module.exports = {
   reauthenticateForEmailChange,
   checkEmailChangeAvailability,
   issueEmailChangeTokenAfterCooldown,
   requestEmailChange,
+  inspectEmailChangeToken,
 };
