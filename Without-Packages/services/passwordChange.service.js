@@ -1,6 +1,8 @@
+const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const User = require("../models/user.model");
 const RefreshSession = require("../models/refreshSession.model");
+const { sendPasswordChangedEmail } = require("./email.service");
 
 const reauthenticateForPasswordChange = async (userId, oldPassword) => {
   const user = await User.findOne({ _id: userId, isActive: true })
@@ -102,7 +104,78 @@ const applyPasswordChange = async (user, passwordHash, session) => {
   return { status: "updated" };
 };
 
+const changePassword = async (userId, oldPassword, newPassword) => {
+  const reauthentication = await reauthenticateForPasswordChange(
+    userId,
+    oldPassword,
+  );
+
+  if (
+    reauthentication.status === "user_inactive" ||
+    reauthentication.status === "old_password_invalid"
+  ) {
+    return reauthentication;
+  }
+
+  if (reauthentication.status !== "reauthenticated") {
+    throw new Error("Unexpected password change reauthentication status.");
+  }
+
+  const { user } = reauthentication;
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  let transactionResult;
+
+  try {
+    transactionResult = await mongoose.connection.transaction(async (session) => {
+      const update = await applyPasswordChange(user, passwordHash, session);
+
+      if (update.status !== "updated") {
+        throw new Error("Unexpected password change update status.");
+      }
+
+      return { status: "changed" };
+    });
+  } catch (error) {
+    if (error?.code !== "password_change_conflict") {
+      throw error;
+    }
+
+    const activeUser = await User.exists({ _id: user._id, isActive: true });
+
+    return {
+      status: activeUser ? "old_password_invalid" : "user_inactive",
+    };
+  }
+
+  if (transactionResult.status !== "changed") {
+    throw new Error("Unexpected password change transaction status.");
+  }
+
+  try {
+    const emailResult = await sendPasswordChangedEmail(user.email);
+
+    return {
+      status: "changed",
+      notificationSent: true,
+      messageId: emailResult.messageId,
+      previewUrl: emailResult.previewUrl,
+    };
+  } catch {
+    console.error(
+      "Password change succeeded, but the notification email could not be sent.",
+    );
+
+    return {
+      status: "changed",
+      notificationSent: false,
+      messageId: null,
+      previewUrl: null,
+    };
+  }
+};
+
 module.exports = {
   reauthenticateForPasswordChange,
   applyPasswordChange,
+  changePassword,
 };
