@@ -204,6 +204,42 @@ const sendPasswordChangedEmail = async (email) => {
   };
 };
 
+const sendEmailChangeConfirmationEmail = async (newEmail, token) => {
+  if (!process.env.FRONTEND_URL) {
+    throw new Error("FRONTEND_URL environment variable is required.");
+  }
+
+  const confirmationUrl = new URL(
+    `/confirm-email-change?key=${encodeURIComponent(token)}`,
+    process.env.FRONTEND_URL,
+  ).toString();
+  const transporter = await getTestTransporter();
+  const info = await transporter.sendMail({
+    to: newEmail,
+    subject: "Confirm your new email address",
+    text: [
+      "Confirm this address as your new login email by opening this link:",
+      confirmationUrl,
+      "",
+      "This link expires in one hour.",
+      "If you did not request this change, you can ignore this email.",
+    ].join("\n"),
+    html: `
+      <h1>Confirm your new email address</h1>
+      <p>
+        <a href="${confirmationUrl}">Confirm new email address</a>
+      </p>
+      <p>This link expires in one hour.</p>
+      <p>If you did not request this change, you can ignore this email.</p>
+    `,
+  });
+
+  return {
+    messageId: info.messageId,
+    previewUrl: nodemailer.getTestMessageUrl(info),
+  };
+};
+
 module.exports = {
   getTestTransporter,
   sendVerificationEmail,
@@ -211,4 +247,5 @@ module.exports = {
   sendOtpCodeEmail,
   sendPasswordResetEmail,
   sendPasswordChangedEmail,
+  sendEmailChangeConfirmationEmail,
 };
