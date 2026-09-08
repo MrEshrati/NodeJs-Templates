@@ -1,6 +1,7 @@
 const tokenGenerator = require("../utils/token.utils");
 const PasswordResetToken = require("../models/passwordResetToken.model");
 const User = require("../models/user.model");
+const RefreshSession = require("../models/refreshSession.model");
 const { sendPasswordResetEmail } = require("./email.service");
 
 const PASSWORD_RESET_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -197,9 +198,79 @@ const consumePasswordResetToken = async (resetToken, session) => {
   return { status: "consumed" };
 };
 
+const applyPasswordReset = async (user, passwordHash, session) => {
+  if (
+    !session ||
+    typeof session.inTransaction !== "function" ||
+    session.inTransaction() !== true
+  ) {
+    throw new Error("An active transaction is required.");
+  }
+
+  if (
+    !user ||
+    user._id === undefined ||
+    user._id === null ||
+    typeof user.email !== "string" ||
+    user.email.trim() === "" ||
+    (user.password !== null && typeof user.password !== "string")
+  ) {
+    throw new TypeError("An inspected user record is required.");
+  }
+
+  if (typeof passwordHash !== "string" || passwordHash.trim() === "") {
+    throw new TypeError("passwordHash must be a non-empty string.");
+  }
+
+  const userUpdate = await User.updateOne(
+    {
+      _id: user._id,
+      email: user.email,
+      password: user.password,
+      isActive: true,
+    },
+    {
+      $set: { password: passwordHash },
+    },
+    {
+      session,
+      upsert: false,
+      runValidators: true,
+    },
+  );
+
+  if (userUpdate.matchedCount !== 1) {
+    // Throw so the caller's transaction also rolls back token consumption.
+    const error = new Error("Password reset state changed.");
+    error.code = "password_reset_conflict";
+    throw error;
+  }
+
+  await RefreshSession.updateMany(
+    {
+      user: user._id,
+      revokedAt: null,
+    },
+    {
+      $currentDate: {
+        revokedAt: true,
+        updatedAt: true,
+      },
+    },
+    {
+      session,
+      upsert: false,
+      timestamps: false,
+    },
+  );
+
+  return { status: "updated" };
+};
+
 module.exports = {
   issuePasswordResetTokenAfterCooldown,
   requestPasswordReset,
   inspectPasswordResetToken,
   consumePasswordResetToken,
+  applyPasswordReset,
 };
