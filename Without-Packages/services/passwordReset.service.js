@@ -153,8 +153,53 @@ const inspectPasswordResetToken = async (uid, token) => {
   return { status: "candidate", user, resetToken };
 };
 
+const consumePasswordResetToken = async (resetToken, session) => {
+  if (
+    !session ||
+    typeof session.inTransaction !== "function" ||
+    session.inTransaction() !== true
+  ) {
+    throw new Error("An active transaction is required.");
+  }
+
+  if (
+    !resetToken ||
+    resetToken._id === undefined ||
+    resetToken._id === null ||
+    resetToken.user === undefined ||
+    resetToken.user === null ||
+    typeof resetToken.tokenHash !== "string" ||
+    resetToken.tokenHash === "" ||
+    !(resetToken.expiresAt instanceof Date) ||
+    !Number.isFinite(resetToken.expiresAt.getTime())
+  ) {
+    throw new TypeError("An inspected password reset token is required.");
+  }
+
+  // The caller commits this deletion together with the password and session updates.
+  const deletedToken = await PasswordResetToken.findOneAndDelete(
+    {
+      _id: resetToken._id,
+      user: resetToken.user,
+      tokenHash: resetToken.tokenHash,
+      expiresAt: resetToken.expiresAt,
+      $expr: { $gt: ["$expiresAt", "$$NOW"] },
+    },
+    { session },
+  )
+    .select("_id")
+    .lean();
+
+  if (!deletedToken) {
+    return { status: "token_invalid" };
+  }
+
+  return { status: "consumed" };
+};
+
 module.exports = {
   issuePasswordResetTokenAfterCooldown,
   requestPasswordReset,
   inspectPasswordResetToken,
+  consumePasswordResetToken,
 };
