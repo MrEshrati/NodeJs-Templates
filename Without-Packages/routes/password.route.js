@@ -1,9 +1,12 @@
 const express = require("express");
 const passwordResetController = require("../controllers/passwordReset.controller");
+const passwordChangeController = require("../controllers/passwordChange.controller");
 const createRequestThrottle = require("../middlewares/requestThrottle.middleware");
+const requireAccessToken = require("../middlewares/accessAuth.middleware");
 const validateRequest = require("../middlewares/validation.middleware");
 const validateResetPassword = require("../validators/passwordResetRequest.validator");
 const validatePasswordResetConfirm = require("../validators/passwordResetConfirm.validator");
+const validatePasswordChange = require("../validators/passwordChange.validator");
 
 const router = express.Router();
 
@@ -19,6 +22,12 @@ const passwordResetConfirmThrottle = createRequestThrottle({
   windowMs: 60 * 60 * 1000,
 });
 
+const passwordChangeThrottle = createRequestThrottle({
+  scope: "password-change:v1",
+  maxRequests: 10,
+  windowMs: 60 * 1000,
+});
+
 router.post(
   "/reset",
   passwordResetThrottle,
@@ -31,6 +40,14 @@ router.post(
   passwordResetConfirmThrottle,
   validateRequest(validatePasswordResetConfirm),
   passwordResetController.confirmPasswordReset,
+);
+
+router.post(
+  "/change",
+  passwordChangeThrottle,
+  requireAccessToken,
+  validateRequest(validatePasswordChange),
+  passwordChangeController.changePassword,
 );
 
 module.exports = router;
