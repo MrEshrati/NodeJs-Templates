@@ -1,5 +1,6 @@
 const bcrypt = require("bcrypt");
 const User = require("../models/user.model");
+const EmailChangeToken = require("../models/emailChangeToken.model");
 const { consumeOtpCode } = require("./otp.service");
 
 const reauthenticateForEmailChange = async (userId, credentials = {}) => {
@@ -47,4 +48,25 @@ const reauthenticateForEmailChange = async (userId, credentials = {}) => {
   return { status: "reauthenticated", user };
 };
 
-module.exports = { reauthenticateForEmailChange };
+const checkEmailChangeAvailability = async (userId, newEmail) => {
+  const now = new Date();
+  const [loginEmailInUse, reservedByAnotherUser] = await Promise.all([
+    User.exists({ email: newEmail }),
+    EmailChangeToken.exists({
+      user: { $ne: userId },
+      newEmail,
+      expiresAt: { $gt: now },
+    }),
+  ]);
+
+  if (loginEmailInUse || reservedByAnotherUser) {
+    return { status: "unavailable" };
+  }
+
+  return { status: "available" };
+};
+
+module.exports = {
+  reauthenticateForEmailChange,
+  checkEmailChangeAvailability,
+};
