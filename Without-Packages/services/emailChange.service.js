@@ -3,6 +3,7 @@ const tokenGenerator = require("../utils/token.utils");
 const User = require("../models/user.model");
 const EmailChangeToken = require("../models/emailChangeToken.model");
 const { consumeOtpCode } = require("./otp.service");
+const { sendEmailChangeConfirmationEmail } = require("./email.service");
 
 const EMAIL_CHANGE_TOKEN_TTL_MS = 60 * 60 * 1000;
 const EMAIL_CHANGE_SEND_COOLDOWN_MS = 3 * 60 * 1000;
@@ -154,8 +155,92 @@ const issueEmailChangeTokenAfterCooldown = async (user, newEmail) => {
   }
 };
 
+const requestEmailChange = async (
+  userId,
+  newEmail,
+  credentials = {},
+) => {
+  const reauthentication = await reauthenticateForEmailChange(
+    userId,
+    credentials,
+  );
+
+  if (
+    reauthentication.status === "password_invalid" ||
+    reauthentication.status === "code_invalid" ||
+    reauthentication.status === "user_inactive"
+  ) {
+    return reauthentication;
+  }
+
+  if (reauthentication.status !== "reauthenticated") {
+    throw new Error("Unexpected email change reauthentication status.");
+  }
+
+  const { user } = reauthentication;
+  const availability = await checkEmailChangeAvailability(user._id, newEmail);
+
+  if (availability.status === "unavailable") {
+    return {
+      status: "accepted",
+      sent: false,
+      previewUrl: null,
+    };
+  }
+
+  if (availability.status !== "available") {
+    throw new Error("Unexpected email change availability status.");
+  }
+
+  const issuedToken = await issueEmailChangeTokenAfterCooldown(user, newEmail);
+
+  if (issuedToken.status === "not_issued") {
+    return {
+      status: "accepted",
+      sent: false,
+      previewUrl: null,
+    };
+  }
+
+  if (issuedToken.status !== "issued") {
+    throw new Error("Unexpected email change token issuance status.");
+  }
+
+  let emailResult;
+
+  try {
+    emailResult = await sendEmailChangeConfirmationEmail(
+      newEmail,
+      issuedToken.token,
+    );
+  } catch (error) {
+    try {
+      await EmailChangeToken.deleteOne({
+        user: user._id,
+        newEmail,
+        tokenHash: issuedToken.tokenHash,
+        expiresAt: issuedToken.expiresAt,
+      });
+    } catch {
+      console.error(
+        "Email change delivery failed, and its token could not be removed.",
+      );
+    }
+
+    throw error;
+  }
+
+  return {
+    status: "accepted",
+    sent: true,
+    messageId: emailResult.messageId,
+    previewUrl: emailResult.previewUrl,
+  };
+};
+
 module.exports = {
   reauthenticateForEmailChange,
   checkEmailChangeAvailability,
   issueEmailChangeTokenAfterCooldown,
+  requestEmailChange,
 };
