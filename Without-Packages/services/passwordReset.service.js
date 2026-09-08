@@ -1,8 +1,13 @@
+const mongoose = require("mongoose");
+const bcrypt = require("bcrypt");
 const tokenGenerator = require("../utils/token.utils");
 const PasswordResetToken = require("../models/passwordResetToken.model");
 const User = require("../models/user.model");
 const RefreshSession = require("../models/refreshSession.model");
-const { sendPasswordResetEmail } = require("./email.service");
+const {
+  sendPasswordResetEmail,
+  sendPasswordChangedEmail,
+} = require("./email.service");
 
 const PASSWORD_RESET_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_SEND_COOLDOWN_MS = 3 * 60 * 1000;
@@ -267,10 +272,91 @@ const applyPasswordReset = async (user, passwordHash, session) => {
   return { status: "updated" };
 };
 
+const confirmPasswordReset = async (uid, token, newPassword) => {
+  const inspection = await inspectPasswordResetToken(uid, token);
+
+  if (
+    inspection.status === "uid_invalid" ||
+    inspection.status === "token_invalid"
+  ) {
+    return inspection;
+  }
+
+  if (inspection.status !== "candidate") {
+    throw new Error("Unexpected password reset inspection status.");
+  }
+
+  const { user, resetToken } = inspection;
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  let transactionResult;
+
+  try {
+    transactionResult = await mongoose.connection.transaction(async (session) => {
+      const consumption = await consumePasswordResetToken(resetToken, session);
+
+      if (consumption.status === "token_invalid") {
+        return consumption;
+      }
+
+      if (consumption.status !== "consumed") {
+        throw new Error("Unexpected password reset token consumption status.");
+      }
+
+      const update = await applyPasswordReset(user, passwordHash, session);
+
+      if (update.status !== "updated") {
+        throw new Error("Unexpected password reset update status.");
+      }
+
+      return { status: "reset" };
+    });
+  } catch (error) {
+    if (error?.code !== "password_reset_conflict") {
+      throw error;
+    }
+
+    const activeUser = await User.exists({ _id: user._id, isActive: true });
+
+    return { status: activeUser ? "token_invalid" : "uid_invalid" };
+  }
+
+  if (transactionResult.status === "token_invalid") {
+    return transactionResult;
+  }
+
+  if (transactionResult.status !== "reset") {
+    throw new Error("Unexpected password reset transaction status.");
+  }
+
+  // Send only after commit: the transaction callback may run more than once.
+  try {
+    const emailResult = await sendPasswordChangedEmail(user.email);
+
+    return {
+      status: "reset",
+      notificationSent: true,
+      messageId: emailResult.messageId,
+      previewUrl: emailResult.previewUrl,
+    };
+  } catch {
+    console.error(
+      "Password reset succeeded, but the notification email could not be sent.",
+    );
+
+    return {
+      status: "reset",
+      notificationSent: false,
+      messageId: null,
+      previewUrl: null,
+    };
+  }
+};
+
 module.exports = {
   issuePasswordResetTokenAfterCooldown,
   requestPasswordReset,
   inspectPasswordResetToken,
   consumePasswordResetToken,
   applyPasswordReset,
+  confirmPasswordReset,
 };
