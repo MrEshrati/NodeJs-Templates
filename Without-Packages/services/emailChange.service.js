@@ -1,10 +1,14 @@
+const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const tokenGenerator = require("../utils/token.utils");
 const User = require("../models/user.model");
 const EmailChangeToken = require("../models/emailChangeToken.model");
 const RefreshSession = require("../models/refreshSession.model");
 const { consumeOtpCode } = require("./otp.service");
-const { sendEmailChangeConfirmationEmail } = require("./email.service");
+const {
+  sendEmailChangeConfirmationEmail,
+  sendEmailChangedEmail,
+} = require("./email.service");
 
 const EMAIL_CHANGE_TOKEN_TTL_MS = 60 * 60 * 1000;
 const EMAIL_CHANGE_SEND_COOLDOWN_MS = 3 * 60 * 1000;
@@ -355,6 +359,64 @@ const applyEmailChange = async (emailChangeToken, session) => {
   };
 };
 
+const confirmEmailChange = async (key) => {
+  const inspection = await inspectEmailChangeToken(key);
+
+  if (inspection.status === "key_invalid") {
+    return inspection;
+  }
+
+  if (inspection.status !== "candidate") {
+    throw new Error("Unexpected email change token inspection status.");
+  }
+
+  let transactionResult;
+
+  try {
+    transactionResult = await mongoose.connection.transaction(
+      async (session) => applyEmailChange(inspection.emailChangeToken, session),
+    );
+  } catch (error) {
+    if (error?.code === "email_change_conflict" || error?.code === 11000) {
+      return { status: "unable" };
+    }
+
+    throw error;
+  }
+
+  if (transactionResult.status === "key_invalid") {
+    return transactionResult;
+  }
+
+  if (transactionResult.status !== "changed") {
+    throw new Error("Unexpected email change transaction status.");
+  }
+
+  try {
+    const emailResult = await sendEmailChangedEmail(
+      transactionResult.oldEmail,
+    );
+
+    return {
+      status: "changed",
+      notificationSent: true,
+      messageId: emailResult.messageId,
+      previewUrl: emailResult.previewUrl,
+    };
+  } catch {
+    console.error(
+      "Email address changed, but the old-address notification could not be sent.",
+    );
+
+    return {
+      status: "changed",
+      notificationSent: false,
+      messageId: null,
+      previewUrl: null,
+    };
+  }
+};
+
 module.exports = {
   reauthenticateForEmailChange,
   checkEmailChangeAvailability,
@@ -362,4 +424,5 @@ module.exports = {
   requestEmailChange,
   inspectEmailChangeToken,
   applyEmailChange,
+  confirmEmailChange,
 };
