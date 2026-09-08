@@ -2,6 +2,7 @@ const bcrypt = require("bcrypt");
 const tokenGenerator = require("../utils/token.utils");
 const User = require("../models/user.model");
 const EmailChangeToken = require("../models/emailChangeToken.model");
+const RefreshSession = require("../models/refreshSession.model");
 const { consumeOtpCode } = require("./otp.service");
 const { sendEmailChangeConfirmationEmail } = require("./email.service");
 
@@ -261,10 +262,104 @@ const inspectEmailChangeToken = async (key) => {
   };
 };
 
+const applyEmailChange = async (emailChangeToken, session) => {
+  if (
+    !session ||
+    typeof session.inTransaction !== "function" ||
+    session.inTransaction() !== true
+  ) {
+    throw new Error("An active transaction is required.");
+  }
+
+  if (
+    !emailChangeToken ||
+    emailChangeToken._id === undefined ||
+    emailChangeToken._id === null ||
+    emailChangeToken.user === undefined ||
+    emailChangeToken.user === null ||
+    typeof emailChangeToken.oldEmail !== "string" ||
+    emailChangeToken.oldEmail.trim() === "" ||
+    typeof emailChangeToken.newEmail !== "string" ||
+    emailChangeToken.newEmail.trim() === "" ||
+    typeof emailChangeToken.tokenHash !== "string" ||
+    emailChangeToken.tokenHash === "" ||
+    !(emailChangeToken.expiresAt instanceof Date) ||
+    !Number.isFinite(emailChangeToken.expiresAt.getTime())
+  ) {
+    throw new TypeError("An inspected email change token is required.");
+  }
+
+  const deletedToken = await EmailChangeToken.findOneAndDelete(
+    {
+      _id: emailChangeToken._id,
+      user: emailChangeToken.user,
+      oldEmail: emailChangeToken.oldEmail,
+      newEmail: emailChangeToken.newEmail,
+      tokenHash: emailChangeToken.tokenHash,
+      expiresAt: emailChangeToken.expiresAt,
+      $expr: { $gt: ["$expiresAt", "$$NOW"] },
+    },
+    { session },
+  );
+
+  if (!deletedToken) {
+    return { status: "key_invalid" };
+  }
+
+  const userUpdate = await User.updateOne(
+    {
+      _id: emailChangeToken.user,
+      email: emailChangeToken.oldEmail,
+      isActive: true,
+    },
+    {
+      $set: {
+        email: emailChangeToken.newEmail,
+        emailVerified: true,
+      },
+    },
+    {
+      session,
+      upsert: false,
+      runValidators: true,
+    },
+  );
+
+  if (userUpdate.matchedCount !== 1) {
+    const error = new Error("Email change state changed.");
+    error.code = "email_change_conflict";
+    throw error;
+  }
+
+  await RefreshSession.updateMany(
+    {
+      user: emailChangeToken.user,
+      revokedAt: null,
+    },
+    {
+      $currentDate: {
+        revokedAt: true,
+        updatedAt: true,
+      },
+    },
+    {
+      session,
+      upsert: false,
+      timestamps: false,
+    },
+  );
+
+  return {
+    status: "changed",
+    oldEmail: emailChangeToken.oldEmail,
+  };
+};
+
 module.exports = {
   reauthenticateForEmailChange,
   checkEmailChangeAvailability,
   issueEmailChangeTokenAfterCooldown,
   requestEmailChange,
   inspectEmailChangeToken,
+  applyEmailChange,
 };
