@@ -10,6 +10,7 @@ const emailRouter = require("./routes/email.route");
 const googleRouter = require("./routes/google.route");
 const notFound = require("./middlewares/notFound.middleware");
 const errorHandler = require("./middlewares/errorHandler.middleware");
+const { validateEnvironment } = require("./config/environment");
 
 const app = express();
 const REQUEST_BODY_LIMIT = "16kb";
@@ -39,19 +40,8 @@ app.use("/google", googleRouter);
 app.use(notFound);
 app.use(errorHandler);
 
-const getRequiredEnvironmentVariable = (name) => {
-  const value = process.env[name];
-
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`${name} environment variable is required.`);
-  }
-
-  return value.trim();
-};
-
 const startServer = async () => {
-  const port = getRequiredEnvironmentVariable("PORT");
-  const databaseUrl = getRequiredEnvironmentVariable("DB_URL");
+  const { port, databaseUrl } = validateEnvironment();
 
   await mongoose.connect(databaseUrl);
 
