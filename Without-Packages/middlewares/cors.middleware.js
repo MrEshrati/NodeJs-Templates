@@ -3,7 +3,25 @@ const ALLOWED_HEADERS = "Content-Type,Authorization";
 const PREFLIGHT_MAX_AGE_SECONDS = "600";
 
 const cors = (req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  let frontendOrigin;
+
+  try {
+    frontendOrigin = new URL(process.env.FRONTEND_URL).origin;
+  } catch {
+    return next(new Error("FRONTEND_URL is not configured correctly."));
+  }
+
+  const requestOrigin =
+    typeof req.get === "function"
+      ? req.get("origin")
+      : req.headers?.origin;
+
+  res.setHeader("Vary", "Origin");
+
+  if (requestOrigin === frontendOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", frontendOrigin);
+  }
+
   res.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS);
   res.setHeader("Access-Control-Allow-Headers", ALLOWED_HEADERS);
   res.setHeader("Access-Control-Max-Age", PREFLIGHT_MAX_AGE_SECONDS);

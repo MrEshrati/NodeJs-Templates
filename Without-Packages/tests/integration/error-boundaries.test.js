@@ -1,5 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const FRONTEND_ORIGIN = "https://frontend.example";
+
+process.env.FRONTEND_URL = `${FRONTEND_ORIGIN}/application`;
+
 const { app } = require("../../app");
 
 let server;
@@ -33,7 +37,11 @@ test.after(async () => {
 
 const assertJsonAndCors = (response) => {
   assert.match(response.headers.get("content-type") ?? "", /^application\/json\b/i);
-  assert.equal(response.headers.get("access-control-allow-origin"), "*");
+  assert.equal(
+    response.headers.get("access-control-allow-origin"),
+    FRONTEND_ORIGIN,
+  );
+  assert.equal(response.headers.get("vary"), "Origin");
   assert.equal(
     response.headers.get("access-control-allow-methods"),
     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
@@ -55,7 +63,9 @@ const assertJsonAndCors = (response) => {
 };
 
 test("unknown routes return the JSON not-found contract", async () => {
-  const response = await fetch(`${baseUrl}/route-that-does-not-exist`);
+  const response = await fetch(`${baseUrl}/route-that-does-not-exist`, {
+    headers: { Origin: FRONTEND_ORIGIN },
+  });
   const payload = await response.json();
 
   assert.equal(response.status, 404);
@@ -72,6 +82,7 @@ test("malformed JSON returns a safe client error", async () => {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Origin: FRONTEND_ORIGIN,
     },
     body: '{"email":"user@example.com",',
   });
@@ -93,6 +104,7 @@ test("oversized JSON returns a safe payload-too-large error", async () => {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Origin: FRONTEND_ORIGIN,
     },
     body: JSON.stringify({ email: oversizedValue }),
   });

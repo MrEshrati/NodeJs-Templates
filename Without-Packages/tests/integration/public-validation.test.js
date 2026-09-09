@@ -1,6 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { fromProject, loadWithMocks } = require("../helpers/module");
+const FRONTEND_ORIGIN = "https://frontend.example";
+
+process.env.FRONTEND_URL = `${FRONTEND_ORIGIN}/application`;
 
 const appPath = fromProject("app.js");
 const throttlePath = fromProject(
@@ -48,6 +51,7 @@ const postJson = async (path, body) => {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Origin: FRONTEND_ORIGIN,
     },
     body: JSON.stringify(body),
   });
@@ -61,7 +65,11 @@ const postJson = async (path, body) => {
 const assertValidationResponse = ({ response, payload }, expectedFields) => {
   assert.equal(response.status, 400);
   assert.match(response.headers.get("content-type") ?? "", /^application\/json\b/i);
-  assert.equal(response.headers.get("access-control-allow-origin"), "*");
+  assert.equal(
+    response.headers.get("access-control-allow-origin"),
+    FRONTEND_ORIGIN,
+  );
+  assert.equal(response.headers.get("vary"), "Origin");
   assert.equal(
     response.headers.get("access-control-allow-methods"),
     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
