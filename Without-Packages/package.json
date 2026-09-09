@@ -10,6 +10,7 @@
     "start": "node app.js",
     "dev": "node --watch app.js",
     "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage",
     "test:e2e": "node --test --test-concurrency=1 tests/e2e/*.e2e.js"
   },
   "dependencies": {
