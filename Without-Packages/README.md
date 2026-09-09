@@ -254,6 +254,16 @@ Run the complete suite with:
 npm test
 ```
 
+Run the database-backed workflow tests with a dedicated `TEST_DB_URL`:
+
+```powershell
+npm run test:e2e
+```
+
+These tests skip safely when `TEST_DB_URL` is absent. Email delivery is mocked,
+but the HTTP routes, services, password hashing, throttles, token creation, and
+MongoDB records are real.
+
 The tests use Node.js's built-in test runner. They cover validators,
 cryptographic utilities, middleware, Mongoose schemas, route registration,
 service boundaries, startup configuration, and real HTTP error and validation

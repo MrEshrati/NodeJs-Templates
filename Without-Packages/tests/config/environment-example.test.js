@@ -96,5 +96,9 @@ test("package scripts use Node's built-in runtime features", () => {
   assert.equal(packageJson.scripts.start, "node app.js");
   assert.equal(packageJson.scripts.dev, "node --watch app.js");
   assert.equal(packageJson.scripts.test, "node --test");
+  assert.equal(
+    packageJson.scripts["test:e2e"],
+    "node --test tests/e2e/*.test.js",
+  );
   assert.equal(packageJson.devDependencies, undefined);
 });
