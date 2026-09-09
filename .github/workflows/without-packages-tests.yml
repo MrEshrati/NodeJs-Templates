@@ -1,0 +1,45 @@
+name: Without-Packages tests
+
+on:
+  push:
+    paths:
+      - "Without-Packages/**"
+      - ".github/workflows/without-packages-tests.yml"
+  pull_request:
+    paths:
+      - "Without-Packages/**"
+      - ".github/workflows/without-packages-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: without-packages-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Node.js 24
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: Without-Packages
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Without-Packages/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
