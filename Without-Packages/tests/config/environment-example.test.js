@@ -93,6 +93,7 @@ test("package scripts use Node's built-in runtime features", () => {
     fs.readFileSync(fromProject("package.json"), "utf8"),
   );
 
+  assert.deepEqual(packageJson.engines, { node: ">=24.0.0" });
   assert.equal(packageJson.scripts.start, "node app.js");
   assert.equal(packageJson.scripts.dev, "node --watch app.js");
   assert.equal(packageJson.scripts.test, "node --test");

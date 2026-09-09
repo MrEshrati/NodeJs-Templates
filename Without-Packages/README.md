@@ -17,7 +17,7 @@ Packages are still used where they provide the required platform integration:
 
 ## Requirements
 
-- Node.js 24
+- Node.js 24 or newer
 - npm
 - MongoDB configured as a replica set
 - Network access when testing Google authentication or Ethereal email previews
