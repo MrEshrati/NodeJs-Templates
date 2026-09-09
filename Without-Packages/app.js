@@ -1,6 +1,7 @@
+require("dotenv").config({ quiet: true });
+
 const express = require("express");
 const mongoose = require("mongoose");
-const app = express();
 const authRouter = require("./routes/auth.route");
 const profileRouter = require("./routes/profile.route");
 const accountRouter = require("./routes/account.route");
@@ -8,10 +9,8 @@ const passwordRouter = require("./routes/password.route");
 const emailRouter = require("./routes/email.route");
 const googleRouter = require("./routes/google.route");
 const errorHandler = require("./middlewares/errorHandler.middleware");
-require("dotenv").config();
 
-const PORT = process.env.PORT;
-const DB_URL = process.env.DB_URL;
+const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -32,13 +31,35 @@ app.use("/google", googleRouter);
 
 app.use(errorHandler);
 
-mongoose
-  .connect(DB_URL)
-  .then((result) => {
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.log(err);
+const getRequiredEnvironmentVariable = (name) => {
+  const value = process.env[name];
+
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${name} environment variable is required.`);
+  }
+
+  return value.trim();
+};
+
+const startServer = async () => {
+  const port = getRequiredEnvironmentVariable("PORT");
+  const databaseUrl = getRequiredEnvironmentVariable("DB_URL");
+
+  await mongoose.connect(databaseUrl);
+
+  return app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
   });
+};
+
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  app,
+  startServer,
+};
