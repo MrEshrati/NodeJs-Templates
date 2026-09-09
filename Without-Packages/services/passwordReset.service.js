@@ -34,7 +34,7 @@ const issuePasswordResetTokenAfterCooldown = async (userId) => {
       },
     },
     {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     },
   );

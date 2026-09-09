@@ -54,7 +54,7 @@ const confirmEmailAddress = async (key) => {
       },
     },
     {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     },
   );
@@ -94,7 +94,7 @@ const issueEmailVerificationTokenAfterCooldown = async (userId) => {
     },
     tokenUpdate,
     {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     },
   );

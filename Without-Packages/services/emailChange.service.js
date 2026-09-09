@@ -117,7 +117,7 @@ const issueEmailChangeTokenAfterCooldown = async (user, newEmail) => {
         },
       },
       {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       },
     );

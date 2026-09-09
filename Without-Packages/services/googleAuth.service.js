@@ -188,7 +188,7 @@ const resolveGoogleIdentity = async (identity) => {
             },
           },
           {
-            new: true,
+            returnDocument: "after",
             upsert: false,
             runValidators: true,
           },
