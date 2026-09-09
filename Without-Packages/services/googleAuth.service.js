@@ -1,5 +1,6 @@
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/user.model");
+const { issueTokenPair } = require("./token.service");
 
 const googleClient = new OAuth2Client();
 
@@ -244,8 +245,51 @@ const resolveGoogleIdentity = async (identity) => {
   return { status: "identity_conflict" };
 };
 
+const authenticateWithGoogle = async (idToken) => {
+  const verification = await verifyGoogleIdToken(idToken);
+
+  if (
+    verification.status === "authentication_failed" ||
+    verification.status === "social_email_unverified"
+  ) {
+    return verification;
+  }
+
+  if (verification.status !== "verified") {
+    throw new Error("Unexpected Google ID-token verification status.");
+  }
+
+  const resolution = await resolveGoogleIdentity(verification.identity);
+
+  if (resolution.status === "user_inactive") {
+    return resolution;
+  }
+
+  if (resolution.status === "identity_conflict") {
+    return { status: "authentication_failed" };
+  }
+
+  if (
+    resolution.status !== "resolved" ||
+    resolution.userId === undefined ||
+    resolution.userId === null ||
+    typeof resolution.created !== "boolean"
+  ) {
+    throw new Error("Unexpected Google identity resolution status.");
+  }
+
+  const tokens = await issueTokenPair(resolution.userId);
+
+  return {
+    status: "authenticated",
+    tokens,
+    created: resolution.created,
+  };
+};
+
 module.exports = {
   verifyGoogleIdToken,
   inspectGoogleIdentity,
   resolveGoogleIdentity,
+  authenticateWithGoogle,
 };
