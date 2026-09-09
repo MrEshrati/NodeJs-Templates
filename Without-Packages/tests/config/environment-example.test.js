@@ -97,6 +97,11 @@ test("package scripts use Node's built-in runtime features", () => {
   assert.equal(packageJson.scripts.start, "node app.js");
   assert.equal(packageJson.scripts.dev, "node --watch app.js");
   assert.equal(packageJson.scripts.test, "node --test");
+  assert.equal(packageJson.private, true);
+  assert.equal(
+    packageJson.scripts["audit:prod"],
+    "npm audit --omit=dev --audit-level=high",
+  );
   assert.equal(
     packageJson.scripts["test:coverage"],
     "node --test --experimental-test-coverage",

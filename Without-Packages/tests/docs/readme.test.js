@@ -65,6 +65,7 @@ test("README documents setup, security, lifetimes, and testing", () => {
     "npm start",
     "npm run dev",
     "npm test",
+    "npm run audit:prod",
     "npm run test:coverage:all",
     "npm run test:e2e",
     "replica set",
@@ -79,6 +80,7 @@ test("README documents setup, security, lifetimes, and testing", () => {
     "X-Request-Id",
     "Cache-Control: no-store",
     ".github/workflows/without-packages-tests.yml",
+    "private",
   ];
 
   for (const content of requiredContent) {

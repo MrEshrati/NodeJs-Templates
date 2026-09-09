@@ -1,6 +1,7 @@
 {
   "name": "without-packages",
   "version": "1.0.0",
+  "private": true,
   "description": "",
   "license": "ISC",
   "author": "",
@@ -13,6 +14,7 @@
     "start": "node app.js",
     "dev": "node --watch app.js",
     "test": "node --test",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
     "test:coverage": "node --test --experimental-test-coverage",
     "test:coverage:all": "node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=95 tests/**/*.test.js tests/e2e/*.e2e.js",
     "test:e2e": "node --test --test-concurrency=1 tests/e2e/*.e2e.js"
@@ -23,6 +25,6 @@
     "express": "^5.2.1",
     "google-auth-library": "^11.0.2",
     "mongoose": "^9.7.2",
-    "nodemailer": "^9.0.6"
+    "nodemailer": "^9.1.1"
   }
 }

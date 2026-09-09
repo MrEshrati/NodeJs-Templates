@@ -276,6 +276,14 @@ Run the complete suite with:
 npm test
 ```
 
+Audit production dependencies for high- and critical-severity advisories with:
+
+```powershell
+npm run audit:prod
+```
+
+The package is marked `private` so npm refuses accidental publication.
+
 Run the database-backed workflow tests with a dedicated `TEST_DB_URL`:
 
 ```powershell
@@ -305,8 +313,9 @@ two independent Node.js 24 jobs whenever this project or its workflow changes
 in a push or pull request. Both jobs install the locked dependencies with
 `npm ci`:
 
-- The regular job runs the package-free test suite with `npm test` and does not
-  require a database or external credentials.
+- The regular job audits production dependencies, then runs the package-free
+  test suite with `npm test`. It does not require a database or external
+  credentials.
 - The E2E job starts an ephemeral MongoDB 8 single-node replica set, supplies a
   guarded `TEST_DB_URL` whose database name ends in `_test`, and runs the
   regular and database-backed suites with `npm run test:coverage:all`. The job

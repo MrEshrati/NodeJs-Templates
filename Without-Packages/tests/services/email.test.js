@@ -7,6 +7,7 @@ const nodemailerPath = require.resolve("nodemailer");
 
 test("password-reset email states the one-hour expiry policy", async () => {
   let message;
+  let transportOptions;
   const originalFrontendUrl = process.env.FRONTEND_URL;
   process.env.FRONTEND_URL = "https://frontend.example";
 
@@ -18,7 +19,8 @@ test("password-reset email states the one-hour expiry policy", async () => {
         pass: "test-password",
       };
     },
-    createTransport() {
+    createTransport(options) {
+      transportOptions = options;
       return {
         async sendMail(value) {
           message = value;
@@ -45,6 +47,9 @@ test("password-reset email states the one-hour expiry policy", async () => {
     assert.doesNotMatch(message.text, /24 hours/i);
     assert.doesNotMatch(message.html, /24 hours/i);
     assert.equal(result.messageId, "message-id");
+    assert.equal(transportOptions.disableFileAccess, true);
+    assert.equal(transportOptions.disableUrlAccess, true);
+    assert.equal(transportOptions.maxRecipients, 1);
   } finally {
     if (originalFrontendUrl === undefined) delete process.env.FRONTEND_URL;
     else process.env.FRONTEND_URL = originalFrontendUrl;

@@ -14,6 +14,9 @@ async function createEtherealTransporter() {
         user: testAccount.user,
         pass: testAccount.pass,
       },
+      disableFileAccess: true,
+      disableUrlAccess: true,
+      maxRecipients: 1,
     },
     {
       from: `"Account Template" <${testAccount.user}>`,
