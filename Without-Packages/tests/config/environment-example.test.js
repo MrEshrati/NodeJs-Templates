@@ -101,6 +101,10 @@ test("package scripts use Node's built-in runtime features", () => {
     "node --test --experimental-test-coverage",
   );
   assert.equal(
+    packageJson.scripts["test:coverage:all"],
+    "node --test --test-concurrency=1 --experimental-test-coverage tests/**/*.test.js tests/e2e/*.e2e.js",
+  );
+  assert.equal(
     packageJson.scripts["test:e2e"],
     "node --test --test-concurrency=1 tests/e2e/*.e2e.js",
   );
