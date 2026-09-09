@@ -65,6 +65,7 @@ test("README documents setup, security, lifetimes, and testing", () => {
     "7 days",
     "Password-reset link | 1 hour",
     "Ethereal",
+    "SIGTERM",
     "Cache-Control: no-store",
     ".github/workflows/without-packages-tests.yml",
   ];

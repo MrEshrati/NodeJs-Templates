@@ -65,6 +65,10 @@ npm run dev
 
 The default example listens at `http://localhost:3000`.
 
+When the directly executed server receives `SIGINT` or `SIGTERM`, it stops the
+HTTP server before disconnecting MongoDB. Repeated shutdown signals share the
+same cleanup operation, and a cleanup failure sets a failing process exit code.
+
 ## Environment configuration
 
 | Variable | Purpose |
@@ -283,11 +287,11 @@ two independent Node.js 24 jobs whenever this project or its workflow changes
 in a push or pull request. Both jobs install the locked dependencies with
 `npm ci`:
 
-- The regular job runs all 151 tests with `npm test` and does not require a
-  database or external credentials.
+- The regular job runs the package-free test suite with `npm test` and does not
+  require a database or external credentials.
 - The E2E job starts an ephemeral MongoDB 8 single-node replica set, supplies a
-  guarded `TEST_DB_URL` whose database name ends in `_test`, and runs all 163
-  regular and database-backed tests with `npm run test:coverage:all`. The job
+  guarded `TEST_DB_URL` whose database name ends in `_test`, and runs the
+  regular and database-backed suites with `npm run test:coverage:all`. The job
   requires at least 90% line, 80% branch, and 95% function coverage.
 
 Because email delivery and Google verification are mocked, the E2E job does

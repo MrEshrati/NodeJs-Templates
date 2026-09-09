@@ -2,7 +2,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
 
-const { app, startServer } = require("../../app");
+const {
+  app,
+  registerShutdownHandlers,
+  startServer,
+  stopServer,
+} = require("../../app");
 
 const validEnvironment = {
   PORT: "4321",
@@ -98,4 +103,124 @@ test("startServer rejects missing configuration before connecting", async (t) =>
   );
 
   assert.equal(connect.mock.callCount(), 0);
+});
+
+test("stopServer closes HTTP before disconnecting MongoDB", async (t) => {
+  const events = [];
+  const server = {
+    close(callback) {
+      events.push("close HTTP");
+      callback();
+    },
+  };
+
+  t.mock.method(mongoose, "disconnect", async () => {
+    events.push("disconnect MongoDB");
+  });
+
+  await stopServer(server);
+
+  assert.deepEqual(events, ["close HTTP", "disconnect MongoDB"]);
+});
+
+test("stopServer still disconnects MongoDB when HTTP closing fails", async (t) => {
+  const closeError = new Error("HTTP close failed");
+  const events = [];
+  const server = {
+    close(callback) {
+      events.push("close HTTP");
+      callback(closeError);
+    },
+  };
+
+  t.mock.method(mongoose, "disconnect", async () => {
+    events.push("disconnect MongoDB");
+  });
+
+  await assert.rejects(stopServer(server), closeError);
+  assert.deepEqual(events, ["close HTTP", "disconnect MongoDB"]);
+});
+
+test("shutdown signal handling is registered once and is idempotent", async (t) => {
+  const handlers = new Map();
+  const events = [];
+  let finishClosing;
+  const server = {
+    close(callback) {
+      events.push("close HTTP");
+      finishClosing = callback;
+    },
+  };
+  const runtime = {
+    exitCode: undefined,
+    once(signal, handler) {
+      handlers.set(signal, handler);
+    },
+  };
+  const logger = {
+    error(error) {
+      events.push(["error", error]);
+    },
+    log(message) {
+      events.push(["log", message]);
+    },
+  };
+
+  t.mock.method(mongoose, "disconnect", async () => {
+    events.push("disconnect MongoDB");
+  });
+
+  const shutdown = registerShutdownHandlers(server, { runtime, logger });
+
+  assert.equal(handlers.get("SIGINT"), shutdown);
+  assert.equal(handlers.get("SIGTERM"), shutdown);
+
+  const firstShutdown = handlers.get("SIGINT")("SIGINT");
+  const secondShutdown = handlers.get("SIGTERM")("SIGTERM");
+
+  assert.equal(firstShutdown, secondShutdown);
+  assert.equal(events.filter((event) => event === "close HTTP").length, 1);
+
+  finishClosing();
+  await firstShutdown;
+
+  assert.equal(
+    events.filter((event) => event === "disconnect MongoDB").length,
+    1,
+  );
+  assert.equal(runtime.exitCode, undefined);
+  assert.deepEqual(events[0], [
+    "log",
+    "Received SIGINT. Shutting down gracefully.",
+  ]);
+});
+
+test("shutdown signal handling reports cleanup failures", async (t) => {
+  const databaseError = new Error("MongoDB disconnect failed");
+  const reportedErrors = [];
+  const runtime = {
+    exitCode: undefined,
+    once() {},
+  };
+  const logger = {
+    error(error) {
+      reportedErrors.push(error);
+    },
+    log() {},
+  };
+  const server = {
+    close(callback) {
+      callback();
+    },
+  };
+
+  t.mock.method(mongoose, "disconnect", async () => {
+    throw databaseError;
+  });
+
+  const shutdown = registerShutdownHandlers(server, { runtime, logger });
+  await shutdown("SIGTERM");
+
+  assert.deepEqual(reportedErrors, [databaseError]);
+  assert.equal(runtime.exitCode, 1);
 });

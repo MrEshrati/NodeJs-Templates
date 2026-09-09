@@ -48,14 +48,91 @@ const startServer = async () => {
   });
 };
 
-if (require.main === module) {
-  startServer().catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
+const closeHttpServer = (server) =>
+  new Promise((resolve, reject) => {
+    if (!server || typeof server.close !== "function") {
+      reject(new TypeError("server must provide a close method."));
+      return;
+    }
+
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
   });
+
+const stopServer = async (server) => {
+  let httpError = null;
+
+  try {
+    await closeHttpServer(server);
+  } catch (error) {
+    httpError = error;
+  }
+
+  try {
+    await mongoose.disconnect();
+  } catch (databaseError) {
+    if (httpError) {
+      throw new AggregateError(
+        [httpError, databaseError],
+        "HTTP server and database shutdown failed.",
+      );
+    }
+
+    throw databaseError;
+  }
+
+  if (httpError) {
+    throw httpError;
+  }
+};
+
+const registerShutdownHandlers = (
+  server,
+  { runtime = process, logger = console } = {},
+) => {
+  let shutdownPromise = null;
+
+  const handleShutdown = (signal) => {
+    if (shutdownPromise) {
+      return shutdownPromise;
+    }
+
+    logger.log(`Received ${signal}. Shutting down gracefully.`);
+
+    shutdownPromise = stopServer(server).catch((error) => {
+      logger.error(error);
+      runtime.exitCode = 1;
+    });
+
+    return shutdownPromise;
+  };
+
+  runtime.once("SIGINT", handleShutdown);
+  runtime.once("SIGTERM", handleShutdown);
+
+  return handleShutdown;
+};
+
+if (require.main === module) {
+  startServer()
+    .then((server) => {
+      registerShutdownHandlers(server);
+    })
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
 }
 
 module.exports = {
   app,
+  registerShutdownHandlers,
   startServer,
+  stopServer,
 };
