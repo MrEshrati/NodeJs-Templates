@@ -43,3 +43,74 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  e2e:
+    name: MongoDB workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: Without-Packages
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Without-Packages/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Start MongoDB replica set
+        run: |
+          docker run --detach \
+            --name without-packages-mongodb \
+            --publish 27017:27017 \
+            mongo:8.0 \
+            --replSet rs0 \
+            --bind_ip_all
+
+          for attempt in {1..30}; do
+            if docker exec without-packages-mongodb \
+              mongosh --quiet --eval \
+              'quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)' > /dev/null 2>&1; then
+              break
+            fi
+
+            if [ "$attempt" -eq 30 ]; then
+              docker logs without-packages-mongodb
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          docker exec without-packages-mongodb \
+            mongosh --quiet --eval \
+            'rs.initiate({_id: "rs0", members: [{_id: 0, host: "localhost:27017"}]})'
+
+          for attempt in {1..30}; do
+            if docker exec without-packages-mongodb \
+              mongosh --quiet --eval \
+              'quit(db.hello().isWritablePrimary ? 0 : 1)' > /dev/null 2>&1; then
+              break
+            fi
+
+            if [ "$attempt" -eq 30 ]; then
+              docker logs without-packages-mongodb
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+      - name: Run database-backed workflow tests
+        env:
+          TEST_DB_URL: mongodb://127.0.0.1:27017/account_api_test?replicaSet=rs0
+        run: npm run test:e2e
