@@ -9,7 +9,7 @@ const {
   sendPasswordChangedEmail,
 } = require("./email.service");
 
-const PASSWORD_RESET_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 const PASSWORD_RESET_SEND_COOLDOWN_MS = 3 * 60 * 1000;
 
 const issuePasswordResetTokenAfterCooldown = async (userId) => {

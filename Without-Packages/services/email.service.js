@@ -162,7 +162,7 @@ const sendPasswordResetEmail = async (email, userId, token) => {
       "Reset your password by opening this link:",
       resetPassLink,
       "",
-      "This link expires in 24 hours.",
+      "This link expires in one hour.",
       "If you did not request a reset password link, you can ignore this email.",
     ].join("\n"),
     html: `
@@ -170,7 +170,7 @@ const sendPasswordResetEmail = async (email, userId, token) => {
       <p>
         <a href="${resetPassLink}">Reset Password</a>
       </p>
-      <p>This link expires in 24 hours.</p>
+      <p>This link expires in one hour.</p>
       <p>If you did not request a reset password link, you can ignore this email.</p>
     `,
   });
