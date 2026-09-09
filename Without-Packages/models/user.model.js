@@ -10,6 +10,14 @@ const userSchema = new Schema(
       trim: true,
       lowercase: true,
     },
+    googleSubject: {
+      type: String,
+      trim: true,
+      minlength: 1,
+      maxlength: 255,
+      unique: true,
+      sparse: true,
+    },
     password: {
       type: String,
       default: null,
