@@ -261,16 +261,26 @@ npm run test:e2e
 ```
 
 These tests run sequentially against the shared test database and skip safely
-when `TEST_DB_URL` is absent. Email delivery is mocked, but the HTTP routes,
-services, password hashing, throttles, token creation, and MongoDB records are
-real. The regular `npm test` command does not discover the `.e2e.js` files.
+when `TEST_DB_URL` is absent. Email delivery and Google token verification are
+mocked, but the HTTP routes, services, password hashing, throttles, token
+creation, and MongoDB records are real. The regular `npm test` command does not
+discover the `.e2e.js` files.
 
 The tests use Node.js's built-in test runner. They cover validators,
 cryptographic utilities, middleware, Mongoose schemas, route registration,
 service boundaries, startup configuration, and real HTTP error and validation
 paths. Unit and HTTP tests do not require MongoDB, Google, or email access.
 
-The repository workflow at
-`.github/workflows/without-packages-tests.yml` runs `npm ci` and `npm test` on
-Node.js 24 whenever this project or its workflow changes in a push or pull
-request.
+The repository workflow at `.github/workflows/without-packages-tests.yml` runs
+two independent Node.js 24 jobs whenever this project or its workflow changes
+in a push or pull request. Both jobs install the locked dependencies with
+`npm ci`:
+
+- The regular job runs all 151 tests with `npm test` and does not require a
+  database or external credentials.
+- The E2E job starts an ephemeral MongoDB 8 single-node replica set, supplies a
+  guarded `TEST_DB_URL` whose database name ends in `_test`, and runs all 12
+  database-backed workflows with `npm run test:e2e`.
+
+Because email delivery and Google verification are mocked, the E2E job does
+not require email-provider or Google credentials.
