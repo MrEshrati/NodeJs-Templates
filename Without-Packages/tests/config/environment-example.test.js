@@ -98,7 +98,7 @@ test("package scripts use Node's built-in runtime features", () => {
   assert.equal(packageJson.scripts.test, "node --test");
   assert.equal(
     packageJson.scripts["test:e2e"],
-    "node --test tests/e2e/*.test.js",
+    "node --test --test-concurrency=1 tests/e2e/*.e2e.js",
   );
   assert.equal(packageJson.devDependencies, undefined);
 });

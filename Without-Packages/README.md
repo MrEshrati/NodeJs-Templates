@@ -260,9 +260,10 @@ Run the database-backed workflow tests with a dedicated `TEST_DB_URL`:
 npm run test:e2e
 ```
 
-These tests skip safely when `TEST_DB_URL` is absent. Email delivery is mocked,
-but the HTTP routes, services, password hashing, throttles, token creation, and
-MongoDB records are real.
+These tests run sequentially against the shared test database and skip safely
+when `TEST_DB_URL` is absent. Email delivery is mocked, but the HTTP routes,
+services, password hashing, throttles, token creation, and MongoDB records are
+real. The regular `npm test` command does not discover the `.e2e.js` files.
 
 The tests use Node.js's built-in test runner. They cover validators,
 cryptographic utilities, middleware, Mongoose schemas, route registration,

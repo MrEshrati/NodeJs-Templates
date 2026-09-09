@@ -13,7 +13,11 @@ const {
 const TEST_EMAIL = "registration-flow@example.com";
 const TEST_PASSWORD = "correct-horse-battery-7";
 const FRONTEND_ORIGIN = "https://account-e2e.example";
-const TEST_SECRET = "account-e2e-secret-with-at-least-32-bytes";
+const JWT_SECRET = "account-e2e-jwt-secret-with-at-least-32-bytes";
+const LOGIN_THROTTLE_SECRET =
+  "account-e2e-login-throttle-secret-with-at-least-32-bytes";
+const REQUEST_THROTTLE_SECRET =
+  "account-e2e-request-throttle-secret-with-at-least-32-bytes";
 
 const testDatabaseConfigured =
   typeof process.env.TEST_DB_URL === "string" &&
@@ -63,9 +67,9 @@ test(
   },
   async (t) => {
     process.env.FRONTEND_URL = FRONTEND_ORIGIN;
-    process.env.JWT_SECRET = TEST_SECRET;
-    process.env.LOGIN_THROTTLE_SECRET = TEST_SECRET;
-    process.env.REQUEST_THROTTLE_SECRET = TEST_SECRET;
+    process.env.JWT_SECRET = JWT_SECRET;
+    process.env.LOGIN_THROTTLE_SECRET = LOGIN_THROTTLE_SECRET;
+    process.env.REQUEST_THROTTLE_SECRET = REQUEST_THROTTLE_SECRET;
 
     let verificationToken = null;
     let verificationRecipient = null;
