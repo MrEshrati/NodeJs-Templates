@@ -102,7 +102,7 @@ test("package scripts use Node's built-in runtime features", () => {
   );
   assert.equal(
     packageJson.scripts["test:coverage:all"],
-    "node --test --test-concurrency=1 --experimental-test-coverage tests/**/*.test.js tests/e2e/*.e2e.js",
+    "node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=95 tests/**/*.test.js tests/e2e/*.e2e.js",
   );
   assert.equal(
     packageJson.scripts["test:e2e"],
