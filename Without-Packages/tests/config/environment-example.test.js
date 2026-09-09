@@ -4,9 +4,10 @@ const fs = require("node:fs");
 const { spawnSync } = require("node:child_process");
 const { fromProject, PROJECT_ROOT } = require("../helpers/module");
 
-const REQUIRED_KEYS = [
+const DOCUMENTED_KEYS = [
   "PORT",
   "DB_URL",
+  "TEST_DB_URL",
   "FRONTEND_URL",
   "GOOGLE_CLIENT_ID",
   "JWT_SECRET",
@@ -40,13 +41,13 @@ const parseEnvironmentExample = () => {
     });
 };
 
-test("environment example contains every required key exactly once", () => {
+test("environment example contains every documented key exactly once", () => {
   const entries = parseEnvironmentExample();
   const keys = entries.map(({ key }) => key);
 
-  assert.deepEqual([...keys].sort(), [...REQUIRED_KEYS].sort());
+  assert.deepEqual([...keys].sort(), [...DOCUMENTED_KEYS].sort());
 
-  for (const key of REQUIRED_KEYS) {
+  for (const key of DOCUMENTED_KEYS) {
     assert.equal(keys.filter((candidate) => candidate === key).length, 1, key);
   }
 });
@@ -59,6 +60,9 @@ test("environment example contains only non-secret development values", () => {
   assert.equal(values.PORT, "3000");
   assert.match(values.DB_URL, /^mongodb:\/\/127\.0\.0\.1:/);
   assert.match(values.DB_URL, /replicaSet=rs0/);
+  assert.match(values.TEST_DB_URL, /^mongodb:\/\/127\.0\.0\.1:/);
+  assert.match(values.TEST_DB_URL, /account_api_test/);
+  assert.match(values.TEST_DB_URL, /replicaSet=rs0/);
   assert.equal(values.FRONTEND_URL, "http://localhost:5173");
   assert.equal(values.GOOGLE_CLIENT_ID, "replace-me");
 

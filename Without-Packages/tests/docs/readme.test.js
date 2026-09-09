@@ -25,9 +25,10 @@ const documentedEndpoints = [
   "POST /email/change/confirm",
 ];
 
-const requiredEnvironmentKeys = [
+const documentedEnvironmentKeys = [
   "PORT",
   "DB_URL",
+  "TEST_DB_URL",
   "FRONTEND_URL",
   "GOOGLE_CLIENT_ID",
   "JWT_SECRET",
@@ -44,8 +45,8 @@ test("README documents every account API operation", () => {
   }
 });
 
-test("README documents every required environment variable", () => {
-  for (const name of requiredEnvironmentKeys) {
+test("README documents every environment variable", () => {
+  for (const name of documentedEnvironmentKeys) {
     assert.ok(readme.includes(`\`${name}\``), name);
   }
 });

@@ -71,6 +71,7 @@ The default example listens at `http://localhost:3000`.
 | --- | --- |
 | `PORT` | HTTP port from 1 through 65535. |
 | `DB_URL` | MongoDB connection URL. The example uses the `rs0` replica set. |
+| `TEST_DB_URL` | Dedicated MongoDB URL for database-backed tests; its database name must end with `_test`. |
 | `FRONTEND_URL` | Frontend base URL used in email links and as the allowed browser CORS origin. |
 | `GOOGLE_CLIENT_ID` | Audience expected in Google ID tokens. |
 | `JWT_SECRET` | HMAC secret for access and refresh JWTs; at least 32 UTF-8 bytes. |
@@ -81,6 +82,10 @@ The default example listens at `http://localhost:3000`.
 The server validates all configuration before connecting to MongoDB. Secret
 values are never included in configuration error messages. The real `.env`
 file is ignored by Git; only `.env.example` should be committed.
+
+The test database helper refuses to connect to or clear a database whose name
+does not end with `_test`. It deletes documents between tests without dropping
+collections or indexes.
 
 For Google sign-in, create a web client in Google Cloud and place its client ID
 in `GOOGLE_CLIENT_ID`. The frontend obtains the Google ID token; the API
