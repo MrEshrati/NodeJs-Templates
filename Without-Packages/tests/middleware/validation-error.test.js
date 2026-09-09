@@ -64,14 +64,36 @@ test("error handler serializes an AppError including fields", () => {
   });
 });
 
-test("error handler supplies safe defaults for ordinary errors", () => {
+test("error handler hides unexpected internal error details", (t) => {
   const res = createResponse();
-  errorHandler(new Error(), {}, res, () => {});
+  const sensitiveError = new Error("database credentials were rejected");
+  const loggedErrors = [];
+  t.mock.method(console, "error", (...values) => loggedErrors.push(values));
+
+  errorHandler(sensitiveError, {}, res, () => {});
 
   assert.equal(res.statusCode, 500);
   assert.deepEqual(res.body, {
     error: true,
     code: "internal_error",
     message: "Something went wrong",
+  });
+  assert.equal(JSON.stringify(res.body).includes(sensitiveError.message), false);
+  assert.equal(loggedErrors.length, 1);
+  assert.equal(loggedErrors[0][1], sensitiveError);
+});
+
+test("error handler converts malformed JSON parser errors to a safe 400", () => {
+  const res = createResponse();
+  const error = new SyntaxError("Unexpected token at position 1");
+  error.type = "entity.parse.failed";
+
+  errorHandler(error, {}, res, () => {});
+
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(res.body, {
+    error: true,
+    code: "invalid_json",
+    message: "Request body contains invalid JSON.",
   });
 });

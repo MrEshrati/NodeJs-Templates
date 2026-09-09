@@ -1,5 +1,29 @@
+const AppError = require("../errors/AppError");
+
 const errorHandler = (err, req, res, next) => {
-  const statusCode = err.statusCode || 500;
+  if (err?.type === "entity.parse.failed") {
+    return res.status(400).json({
+      error: true,
+      code: "invalid_json",
+      message: "Request body contains invalid JSON.",
+    });
+  }
+
+  const validAppError =
+    err instanceof AppError &&
+    Number.isInteger(err.statusCode) &&
+    err.statusCode >= 400 &&
+    err.statusCode <= 599;
+
+  if (!validAppError) {
+    console.error("Unexpected application error:", err);
+
+    return res.status(500).json({
+      error: true,
+      code: "internal_error",
+      message: "Something went wrong",
+    });
+  }
 
   const response = {
     error: true,
@@ -11,7 +35,7 @@ const errorHandler = (err, req, res, next) => {
     response.fields = err.fields;
   }
 
-  res.status(statusCode).json(response);
+  return res.status(err.statusCode).json(response);
 };
 
 module.exports = errorHandler;

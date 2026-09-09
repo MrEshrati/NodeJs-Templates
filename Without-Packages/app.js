@@ -8,12 +8,10 @@ const accountRouter = require("./routes/account.route");
 const passwordRouter = require("./routes/password.route");
 const emailRouter = require("./routes/email.route");
 const googleRouter = require("./routes/google.route");
+const notFound = require("./middlewares/notFound.middleware");
 const errorHandler = require("./middlewares/errorHandler.middleware");
 
 const app = express();
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -22,6 +20,9 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 app.use("/auth", authRouter);
 app.use("/profile", profileRouter);
 app.use("/", accountRouter);
@@ -29,6 +30,7 @@ app.use("/password", passwordRouter);
 app.use("/email", emailRouter);
 app.use("/google", googleRouter);
 
+app.use(notFound);
 app.use(errorHandler);
 
 const getRequiredEnvironmentVariable = (name) => {
