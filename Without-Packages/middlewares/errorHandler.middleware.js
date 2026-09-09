@@ -9,6 +9,14 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
+  if (err?.type === "entity.too.large") {
+    return res.status(413).json({
+      error: true,
+      code: "payload_too_large",
+      message: "Request body is too large.",
+    });
+  }
+
   const validAppError =
     err instanceof AppError &&
     Number.isInteger(err.statusCode) &&

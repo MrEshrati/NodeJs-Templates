@@ -12,6 +12,7 @@ const notFound = require("./middlewares/notFound.middleware");
 const errorHandler = require("./middlewares/errorHandler.middleware");
 
 const app = express();
+const REQUEST_BODY_LIMIT = "16kb";
 
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -20,8 +21,13 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: REQUEST_BODY_LIMIT,
+  }),
+);
 
 app.use("/auth", authRouter);
 app.use("/profile", profileRouter);

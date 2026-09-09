@@ -97,3 +97,18 @@ test("error handler converts malformed JSON parser errors to a safe 400", () => 
     message: "Request body contains invalid JSON.",
   });
 });
+
+test("error handler converts oversized-body parser errors to a safe 413", () => {
+  const res = createResponse();
+  const error = new Error("request entity too large");
+  error.type = "entity.too.large";
+
+  errorHandler(error, {}, res, () => {});
+
+  assert.equal(res.statusCode, 413);
+  assert.deepEqual(res.body, {
+    error: true,
+    code: "payload_too_large",
+    message: "Request body is too large.",
+  });
+});

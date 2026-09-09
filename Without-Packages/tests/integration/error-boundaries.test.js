@@ -76,3 +76,24 @@ test("malformed JSON returns a safe client error", async () => {
   });
   assert.equal(JSON.stringify(payload).includes("Unexpected"), false);
 });
+
+test("oversized JSON returns a safe payload-too-large error", async () => {
+  const oversizedValue = "sensitive-value".repeat(1_500);
+  const response = await fetch(`${baseUrl}/auth/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email: oversizedValue }),
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 413);
+  assertJsonAndCors(response);
+  assert.deepEqual(payload, {
+    error: true,
+    code: "payload_too_large",
+    message: "Request body is too large.",
+  });
+  assert.equal(JSON.stringify(payload).includes(oversizedValue), false);
+});
