@@ -127,6 +127,8 @@ the documented HTTP responses.
 - Token-bearing and account responses use `Cache-Control: no-store`.
 - Responses omit the `X-Powered-By` header so the Express implementation is not
   advertised to clients.
+- Every response includes a server-generated `X-Request-Id`. Browser clients
+  can read this header and use it to correlate unexpected server-error logs.
 
 ## API endpoints
 

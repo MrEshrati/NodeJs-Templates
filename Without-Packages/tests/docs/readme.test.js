@@ -75,6 +75,7 @@ test("README documents setup, security, lifetimes, and testing", () => {
     "Ethereal",
     "SIGTERM",
     "X-Powered-By",
+    "X-Request-Id",
     "Cache-Control: no-store",
     ".github/workflows/without-packages-tests.yml",
   ];

@@ -24,7 +24,9 @@ const errorHandler = (err, req, res, next) => {
     err.statusCode <= 599;
 
   if (!validAppError) {
-    console.error("Unexpected application error:", err);
+    const requestId = req?.requestId ?? "unavailable";
+
+    console.error(`Unexpected application error [requestId=${requestId}]:`, err);
 
     return res.status(500).json({
       error: true,

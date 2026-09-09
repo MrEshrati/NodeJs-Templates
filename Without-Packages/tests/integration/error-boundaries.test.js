@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const FRONTEND_ORIGIN = "https://frontend.example";
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 process.env.FRONTEND_URL = `${FRONTEND_ORIGIN}/application`;
 
@@ -50,7 +52,12 @@ const assertJsonAndCors = (response) => {
     response.headers.get("access-control-allow-headers"),
     "Content-Type,Authorization",
   );
+  assert.equal(
+    response.headers.get("access-control-expose-headers"),
+    "X-Request-Id",
+  );
   assert.equal(response.headers.get("access-control-max-age"), "600");
+  assert.match(response.headers.get("x-request-id") ?? "", UUID_PATTERN);
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("pragma"), "no-cache");
   assert.equal(response.headers.get("x-powered-by"), null);

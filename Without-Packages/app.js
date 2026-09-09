@@ -10,6 +10,7 @@ const passwordRouter = require("./routes/password.route");
 const emailRouter = require("./routes/email.route");
 const googleRouter = require("./routes/google.route");
 const securityHeaders = require("./middlewares/securityHeaders.middleware");
+const requestId = require("./middlewares/requestId.middleware");
 const cors = require("./middlewares/cors.middleware");
 const notFound = require("./middlewares/notFound.middleware");
 const errorHandler = require("./middlewares/errorHandler.middleware");
@@ -20,6 +21,7 @@ const REQUEST_BODY_LIMIT = "16kb";
 
 app.disable("x-powered-by");
 app.use(securityHeaders);
+app.use(requestId);
 app.use(cors);
 app.use("/health", healthRouter);
 

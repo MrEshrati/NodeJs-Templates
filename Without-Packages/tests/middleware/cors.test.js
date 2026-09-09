@@ -10,6 +10,7 @@ const expectedCommonHeaders = {
   vary: "Origin",
   "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
   "access-control-allow-headers": "Content-Type,Authorization",
+  "access-control-expose-headers": "X-Request-Id",
   "access-control-max-age": "600",
 };
 

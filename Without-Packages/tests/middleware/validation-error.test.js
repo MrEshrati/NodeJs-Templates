@@ -68,9 +68,10 @@ test("error handler hides unexpected internal error details", (t) => {
   const res = createResponse();
   const sensitiveError = new Error("database credentials were rejected");
   const loggedErrors = [];
+  const requestId = "99e15b87-c9de-4e01-94c8-b59dd81d52e8";
   t.mock.method(console, "error", (...values) => loggedErrors.push(values));
 
-  errorHandler(sensitiveError, {}, res, () => {});
+  errorHandler(sensitiveError, { requestId }, res, () => {});
 
   assert.equal(res.statusCode, 500);
   assert.deepEqual(res.body, {
@@ -80,6 +81,10 @@ test("error handler hides unexpected internal error details", (t) => {
   });
   assert.equal(JSON.stringify(res.body).includes(sensitiveError.message), false);
   assert.equal(loggedErrors.length, 1);
+  assert.equal(
+    loggedErrors[0][0],
+    `Unexpected application error [requestId=${requestId}]:`,
+  );
   assert.equal(loggedErrors[0][1], sensitiveError);
 });
 
