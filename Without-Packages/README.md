@@ -260,11 +260,18 @@ Run the database-backed workflow tests with a dedicated `TEST_DB_URL`:
 npm run test:e2e
 ```
 
-These tests run sequentially against the shared test database and skip safely
-when `TEST_DB_URL` is absent. Email delivery and Google token verification are
-mocked, but the HTTP routes, services, password hashing, throttles, token
-creation, and MongoDB records are real. The regular `npm test` command does not
-discover the `.e2e.js` files.
+With the same dedicated `TEST_DB_URL`, run the regular and database-backed
+tests together with coverage thresholds:
+
+```powershell
+npm run test:coverage:all
+```
+
+The E2E tests run sequentially against the shared test database and skip
+safely when `TEST_DB_URL` is absent. Email delivery and Google token
+verification are mocked, but the HTTP routes, services, password hashing,
+throttles, token creation, and MongoDB records are real. The regular `npm test`
+command does not discover the `.e2e.js` files.
 
 The tests use Node.js's built-in test runner. They cover validators,
 cryptographic utilities, middleware, Mongoose schemas, route registration,
@@ -279,8 +286,9 @@ in a push or pull request. Both jobs install the locked dependencies with
 - The regular job runs all 151 tests with `npm test` and does not require a
   database or external credentials.
 - The E2E job starts an ephemeral MongoDB 8 single-node replica set, supplies a
-  guarded `TEST_DB_URL` whose database name ends in `_test`, and runs all 12
-  database-backed workflows with `npm run test:e2e`.
+  guarded `TEST_DB_URL` whose database name ends in `_test`, and runs all 163
+  regular and database-backed tests with `npm run test:coverage:all`. The job
+  requires at least 90% line, 80% branch, and 95% function coverage.
 
 Because email delivery and Google verification are mocked, the E2E job does
 not require email-provider or Google credentials.

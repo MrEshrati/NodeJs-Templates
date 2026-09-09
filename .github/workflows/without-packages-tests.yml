@@ -110,7 +110,7 @@ jobs:
             sleep 2
           done
 
-      - name: Run database-backed workflow tests
+      - name: Run workflows and enforce coverage
         env:
           TEST_DB_URL: mongodb://127.0.0.1:27017/account_api_test?replicaSet=rs0
-        run: npm run test:e2e
+        run: npm run test:coverage:all

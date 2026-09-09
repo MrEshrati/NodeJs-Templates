@@ -57,6 +57,7 @@ test("README documents setup, security, lifetimes, and testing", () => {
     "npm start",
     "npm run dev",
     "npm test",
+    "npm run test:coverage:all",
     "npm run test:e2e",
     "replica set",
     "16 KB",
