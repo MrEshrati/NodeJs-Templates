@@ -64,12 +64,13 @@ const assertValidationResponse = ({ response, payload }, expectedFields) => {
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
   assert.equal(
     response.headers.get("access-control-allow-methods"),
-    "GET,POST,PUT,DELETE,PATCH",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS",
   );
   assert.equal(
     response.headers.get("access-control-allow-headers"),
     "Content-Type,Authorization",
   );
+  assert.equal(response.headers.get("access-control-max-age"), "600");
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("pragma"), "no-cache");
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");

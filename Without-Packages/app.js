@@ -9,6 +9,7 @@ const passwordRouter = require("./routes/password.route");
 const emailRouter = require("./routes/email.route");
 const googleRouter = require("./routes/google.route");
 const securityHeaders = require("./middlewares/securityHeaders.middleware");
+const cors = require("./middlewares/cors.middleware");
 const notFound = require("./middlewares/notFound.middleware");
 const errorHandler = require("./middlewares/errorHandler.middleware");
 const { validateEnvironment } = require("./config/environment");
@@ -17,13 +18,7 @@ const app = express();
 const REQUEST_BODY_LIMIT = "16kb";
 
 app.use(securityHeaders);
-
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,PATCH");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
-  next();
-});
+app.use(cors);
 
 app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
 app.use(
