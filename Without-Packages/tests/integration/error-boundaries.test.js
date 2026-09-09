@@ -53,6 +53,7 @@ const assertJsonAndCors = (response) => {
   assert.equal(response.headers.get("access-control-max-age"), "600");
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("pragma"), "no-cache");
+  assert.equal(response.headers.get("x-powered-by"), null);
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   assert.equal(response.headers.get("x-frame-options"), "DENY");
   assert.equal(response.headers.get("referrer-policy"), "no-referrer");

@@ -18,6 +18,7 @@ const { validateEnvironment } = require("./config/environment");
 const app = express();
 const REQUEST_BODY_LIMIT = "16kb";
 
+app.disable("x-powered-by");
 app.use(securityHeaders);
 app.use(cors);
 app.use("/health", healthRouter);

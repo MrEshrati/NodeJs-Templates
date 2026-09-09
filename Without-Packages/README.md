@@ -125,6 +125,8 @@ the documented HTTP responses.
   clients, remain supported.
 - Browser preflight requests return `204` before routing or throttling.
 - Token-bearing and account responses use `Cache-Control: no-store`.
+- Responses omit the `X-Powered-By` header so the Express implementation is not
+  advertised to clients.
 
 ## API endpoints
 
