@@ -129,7 +129,123 @@ const inspectGoogleIdentity = async (identity) => {
   };
 };
 
+const resolveGoogleIdentity = async (identity) => {
+  const subject = identity?.subject;
+  const email = identity?.email;
+
+  if (
+    typeof subject !== "string" ||
+    subject.trim() === "" ||
+    typeof email !== "string" ||
+    email.trim() === ""
+  ) {
+    throw new TypeError("A verified Google identity is required.");
+  }
+
+  const normalizedIdentity = {
+    subject: subject.trim(),
+    email: email.trim().toLowerCase(),
+  };
+
+  await User.init();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const inspection = await inspectGoogleIdentity(normalizedIdentity);
+
+    if (
+      inspection.status === "user_inactive" ||
+      inspection.status === "identity_conflict"
+    ) {
+      return inspection;
+    }
+
+    if (inspection.status === "existing") {
+      return {
+        status: "resolved",
+        userId: inspection.user._id,
+        created: false,
+      };
+    }
+
+    try {
+      if (inspection.status === "link_candidate") {
+        const linkedUser = await User.findOneAndUpdate(
+          {
+            _id: inspection.user._id,
+            email: inspection.user.email,
+            isActive: true,
+            $or: [
+              { googleSubject: { $exists: false } },
+              { googleSubject: null },
+              { googleSubject: "" },
+            ],
+          },
+          {
+            $set: {
+              googleSubject: normalizedIdentity.subject,
+              emailVerified: true,
+            },
+          },
+          {
+            new: true,
+            upsert: false,
+            runValidators: true,
+          },
+        )
+          .select("_id")
+          .lean();
+
+        if (linkedUser) {
+          return {
+            status: "resolved",
+            userId: linkedUser._id,
+            created: false,
+          };
+        }
+
+        continue;
+      }
+
+      if (inspection.status === "create_candidate") {
+        const createdUser = await User.create({
+          email: normalizedIdentity.email,
+          googleSubject: normalizedIdentity.subject,
+          password: null,
+          emailVerified: true,
+        });
+
+        return {
+          status: "resolved",
+          userId: createdUser._id,
+          created: true,
+        };
+      }
+
+      throw new Error("Unexpected Google identity inspection status.");
+    } catch (error) {
+      const duplicateIdentity =
+        error?.code === 11000 &&
+        (error.keyPattern?.email === 1 ||
+          error.keyPattern?.googleSubject === 1 ||
+          Object.prototype.hasOwnProperty.call(error.keyValue ?? {}, "email") ||
+          Object.prototype.hasOwnProperty.call(
+            error.keyValue ?? {},
+            "googleSubject",
+          ) ||
+          error.message?.includes("email_1") ||
+          error.message?.includes("googleSubject_1"));
+
+      if (!duplicateIdentity) {
+        throw error;
+      }
+    }
+  }
+
+  return { status: "identity_conflict" };
+};
+
 module.exports = {
   verifyGoogleIdToken,
   inspectGoogleIdentity,
+  resolveGoogleIdentity,
 };
