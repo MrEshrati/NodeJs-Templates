@@ -67,7 +67,11 @@ The default example listens at `http://localhost:3000`.
 
 When the directly executed server receives `SIGINT` or `SIGTERM`, it stops the
 HTTP server before disconnecting MongoDB. Repeated shutdown signals share the
-same cleanup operation, and a cleanup failure sets a failing process exit code.
+same cleanup operation. A 10-second shutdown deadline force-closes lingering
+HTTP connections, and any cleanup failure sets a failing process exit code.
+
+The HTTP server allows 10 seconds for headers, 30 seconds for a complete
+request or inactive socket, and 5 seconds for an idle keep-alive connection.
 
 ## Environment configuration
 

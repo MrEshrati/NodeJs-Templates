@@ -18,6 +18,13 @@ const { validateEnvironment } = require("./config/environment");
 
 const app = express();
 const REQUEST_BODY_LIMIT = "16kb";
+const HTTP_TIMEOUTS = Object.freeze({
+  headers: 10_000,
+  keepAlive: 5_000,
+  request: 30_000,
+  shutdown: 10_000,
+  socket: 30_000,
+});
 
 app.disable("x-powered-by");
 app.use(securityHeaders);
@@ -48,9 +55,16 @@ const startServer = async () => {
 
   await mongoose.connect(databaseUrl);
 
-  return app.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`Server running on port ${port}`);
   });
+
+  server.headersTimeout = HTTP_TIMEOUTS.headers;
+  server.keepAliveTimeout = HTTP_TIMEOUTS.keepAlive;
+  server.requestTimeout = HTTP_TIMEOUTS.request;
+  server.timeout = HTTP_TIMEOUTS.socket;
+
+  return server;
 };
 
 const closeHttpServer = (server) =>
@@ -70,7 +84,7 @@ const closeHttpServer = (server) =>
     });
   });
 
-const stopServer = async (server) => {
+const performServerShutdown = async (server) => {
   let httpError = null;
 
   try {
@@ -95,6 +109,39 @@ const stopServer = async (server) => {
   if (httpError) {
     throw httpError;
   }
+};
+
+const stopServer = (
+  server,
+  { shutdownTimeoutMs = HTTP_TIMEOUTS.shutdown } = {},
+) => {
+  if (!Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs <= 0) {
+    throw new TypeError("shutdownTimeoutMs must be a positive integer.");
+  }
+
+  let timeout;
+  const shutdown = performServerShutdown(server);
+  const deadline = new Promise((_, reject) => {
+    timeout = setTimeout(() => {
+      const timeoutError = new Error(
+        `Server shutdown exceeded ${shutdownTimeoutMs} milliseconds.`,
+      );
+
+      reject(timeoutError);
+
+      if (typeof server?.closeAllConnections === "function") {
+        try {
+          server.closeAllConnections();
+        } catch {
+          // The deadline error remains the primary shutdown failure.
+        }
+      }
+    }, shutdownTimeoutMs);
+  });
+
+  return Promise.race([shutdown, deadline]).finally(() => {
+    clearTimeout(timeout);
+  });
 };
 
 const registerShutdownHandlers = (

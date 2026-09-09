@@ -72,6 +72,11 @@ test("startServer connects to MongoDB before listening", async (t) => {
     assert.equal(server, fakeServer);
   });
 
+  assert.equal(fakeServer.headersTimeout, 10_000);
+  assert.equal(fakeServer.keepAliveTimeout, 5_000);
+  assert.equal(fakeServer.requestTimeout, 30_000);
+  assert.equal(fakeServer.timeout, 30_000);
+
   assert.deepEqual(events, [
     ["connect", "mongodb://127.0.0.1:27017/test-database"],
     ["listen", 4321],
@@ -139,6 +144,30 @@ test("stopServer still disconnects MongoDB when HTTP closing fails", async (t) =
 
   await assert.rejects(stopServer(server), closeError);
   assert.deepEqual(events, ["close HTTP", "disconnect MongoDB"]);
+});
+
+test("stopServer force-closes HTTP connections after its deadline", async (t) => {
+  const events = [];
+  const server = {
+    close() {
+      events.push("close HTTP");
+    },
+    closeAllConnections() {
+      events.push("force close HTTP");
+    },
+  };
+
+  const disconnect = t.mock.method(mongoose, "disconnect", async () => {
+    events.push("disconnect MongoDB");
+  });
+
+  await assert.rejects(
+    stopServer(server, { shutdownTimeoutMs: 5 }),
+    /Server shutdown exceeded 5 milliseconds/,
+  );
+
+  assert.deepEqual(events, ["close HTTP", "force close HTTP"]);
+  assert.equal(disconnect.mock.callCount(), 0);
 });
 
 test("shutdown signal handling is registered once and is idempotent", async (t) => {

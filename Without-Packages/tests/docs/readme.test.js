@@ -74,6 +74,7 @@ test("README documents setup, security, lifetimes, and testing", () => {
     "Password-reset link | 1 hour",
     "Ethereal",
     "SIGTERM",
+    "shutdown deadline",
     "X-Powered-By",
     "X-Request-Id",
     "Cache-Control: no-store",
