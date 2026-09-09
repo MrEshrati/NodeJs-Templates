@@ -1,4 +1,5 @@
 const { OAuth2Client } = require("google-auth-library");
+const User = require("../models/user.model");
 
 const googleClient = new OAuth2Client();
 
@@ -58,4 +59,77 @@ const verifyGoogleIdToken = async (idToken) => {
   };
 };
 
-module.exports = { verifyGoogleIdToken };
+const inspectGoogleIdentity = async (identity) => {
+  const subject = identity?.subject;
+  const email = identity?.email;
+
+  if (
+    typeof subject !== "string" ||
+    subject.trim() === "" ||
+    typeof email !== "string" ||
+    email.trim() === ""
+  ) {
+    throw new TypeError("A verified Google identity is required.");
+  }
+
+  const normalizedSubject = subject.trim();
+  const normalizedEmail = email.trim().toLowerCase();
+  const subjectLinkedUser = await User.findOne({
+    googleSubject: normalizedSubject,
+  })
+    .select("_id email googleSubject isActive")
+    .lean();
+
+  if (subjectLinkedUser) {
+    if (!subjectLinkedUser.isActive) {
+      return { status: "user_inactive" };
+    }
+
+    return {
+      status: "existing",
+      user: subjectLinkedUser,
+    };
+  }
+
+  const emailMatchedUser = await User.findOne({ email: normalizedEmail })
+    .select("_id email googleSubject isActive")
+    .lean();
+
+  if (!emailMatchedUser) {
+    return { status: "create_candidate" };
+  }
+
+  if (!emailMatchedUser.isActive) {
+    return { status: "user_inactive" };
+  }
+
+  const existingGoogleSubject =
+    typeof emailMatchedUser.googleSubject === "string" &&
+    emailMatchedUser.googleSubject.trim() !== ""
+      ? emailMatchedUser.googleSubject.trim()
+      : null;
+
+  if (
+    existingGoogleSubject &&
+    existingGoogleSubject !== normalizedSubject
+  ) {
+    return { status: "identity_conflict" };
+  }
+
+  if (existingGoogleSubject) {
+    return {
+      status: "existing",
+      user: emailMatchedUser,
+    };
+  }
+
+  return {
+    status: "link_candidate",
+    user: emailMatchedUser,
+  };
+};
+
+module.exports = {
+  verifyGoogleIdToken,
+  inspectGoogleIdentity,
+};
