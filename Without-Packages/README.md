@@ -128,6 +128,16 @@ the documented HTTP responses.
 
 ## API endpoints
 
+### Health
+
+- `GET /health/live` — returns `200` with `{"status":"ok"}` while the Node.js
+  process is running.
+- `GET /health/ready` — returns `200` with `{"status":"ready"}` when MongoDB is
+  connected, or `503` with `{"status":"unavailable"}` otherwise.
+
+Health endpoints require no authentication. They use the same security and
+CORS headers as the rest of the API and are never cached.
+
 ### Authentication
 
 | Endpoint | Authentication | Body | Result |

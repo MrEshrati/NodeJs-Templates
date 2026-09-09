@@ -2,6 +2,7 @@ require("dotenv").config({ quiet: true });
 
 const express = require("express");
 const mongoose = require("mongoose");
+const healthRouter = require("./routes/health.route");
 const authRouter = require("./routes/auth.route");
 const profileRouter = require("./routes/profile.route");
 const accountRouter = require("./routes/account.route");
@@ -19,6 +20,7 @@ const REQUEST_BODY_LIMIT = "16kb";
 
 app.use(securityHeaders);
 app.use(cors);
+app.use("/health", healthRouter);
 
 app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
 app.use(

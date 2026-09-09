@@ -37,10 +37,18 @@ const documentedEnvironmentKeys = [
   "REQUEST_THROTTLE_SECRET",
 ];
 
+const documentedHealthEndpoints = ["GET /health/live", "GET /health/ready"];
+
 test("README documents every account API operation", () => {
   assert.equal(documentedEndpoints.length, 17);
 
   for (const endpoint of documentedEndpoints) {
+    assert.ok(readme.includes(`\`${endpoint}\``), endpoint);
+  }
+});
+
+test("README documents every health endpoint", () => {
+  for (const endpoint of documentedHealthEndpoints) {
     assert.ok(readme.includes(`\`${endpoint}\``), endpoint);
   }
 });
