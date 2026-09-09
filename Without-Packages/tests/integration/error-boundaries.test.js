@@ -42,6 +42,15 @@ const assertJsonAndCors = (response) => {
     response.headers.get("access-control-allow-headers"),
     "Content-Type,Authorization",
   );
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("pragma"), "no-cache");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("x-frame-options"), "DENY");
+  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  assert.equal(
+    response.headers.get("content-security-policy"),
+    "default-src 'none'",
+  );
 };
 
 test("unknown routes return the JSON not-found contract", async () => {

@@ -70,6 +70,15 @@ const assertValidationResponse = ({ response, payload }, expectedFields) => {
     response.headers.get("access-control-allow-headers"),
     "Content-Type,Authorization",
   );
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("pragma"), "no-cache");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("x-frame-options"), "DENY");
+  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  assert.equal(
+    response.headers.get("content-security-policy"),
+    "default-src 'none'",
+  );
   assert.equal(payload.error, true);
   assert.equal(payload.code, "validation_error");
   assert.equal(payload.message, "Validation failed.");

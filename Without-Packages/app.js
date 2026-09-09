@@ -8,12 +8,15 @@ const accountRouter = require("./routes/account.route");
 const passwordRouter = require("./routes/password.route");
 const emailRouter = require("./routes/email.route");
 const googleRouter = require("./routes/google.route");
+const securityHeaders = require("./middlewares/securityHeaders.middleware");
 const notFound = require("./middlewares/notFound.middleware");
 const errorHandler = require("./middlewares/errorHandler.middleware");
 const { validateEnvironment } = require("./config/environment");
 
 const app = express();
 const REQUEST_BODY_LIMIT = "16kb";
+
+app.use(securityHeaders);
 
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
