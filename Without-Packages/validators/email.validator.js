@@ -1,40 +1,52 @@
+const LOCAL_PART_PATTERN = /^[A-Za-z0-9!#$%&'*+\/=?^_`{|}~.-]+$/;
+const DOMAIN_LABEL_PATTERN =
+  /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/;
+
 function isValidEmail(email) {
-  let trimedEmail = email.trim();
-  const at_index = trimedEmail.indexOf("@");
-
-  // check max valid length
-  if (trimedEmail.length > 254) {
+  if (typeof email !== "string") {
     return false;
   }
 
-  // check index of @
-  if (at_index == 0 || at_index == -1) {
+  const normalizedEmail = email.trim();
+
+  if (normalizedEmail === "" || normalizedEmail.length > 254) {
     return false;
   }
 
-  // check if there is more than one @
-  if (at_index != trimedEmail.lastIndexOf("@")) {
+  const atIndex = normalizedEmail.indexOf("@");
+
+  if (atIndex < 1 || atIndex !== normalizedEmail.lastIndexOf("@")) {
     return false;
   }
 
-  // spliting the before and after of prefix@domain in email
-  const [prefix, domain] = trimedEmail.split("@");
-  if (!prefix || !domain || prefix.length > 64 || domain.length > 253) {
+  const localPart = normalizedEmail.slice(0, atIndex);
+  const domain = normalizedEmail.slice(atIndex + 1);
+
+  if (
+    localPart.length > 64 ||
+    domain.length === 0 ||
+    domain.length > 253 ||
+    !LOCAL_PART_PATTERN.test(localPart) ||
+    localPart.startsWith(".") ||
+    localPart.endsWith(".") ||
+    localPart.includes("..")
+  ) {
     return false;
   }
 
-  //check if the first and last char of prefix is alphabet or number
-  if (prefix.startsWith(".") || prefix.endsWith(".") || prefix.includes("..")) {
+  const domainLabels = domain.split(".");
+
+  if (domainLabels.length < 2) {
     return false;
   }
 
-  // spliting the before and after leftSide.domainExtension in email
-  const domainList = domain.split(".");
-  if (domainList.length != 2 || domainList[1].length < 2) {
+  if (!domainLabels.every((label) => DOMAIN_LABEL_PATTERN.test(label))) {
     return false;
   }
 
-  return true;
+  const topLevelDomain = domainLabels.at(-1);
+
+  return topLevelDomain.length >= 2 && /[A-Za-z]/.test(topLevelDomain);
 }
 
 module.exports = isValidEmail;
