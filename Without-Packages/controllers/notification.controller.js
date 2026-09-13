@@ -1,5 +1,6 @@
 const AppError = require("../errors/AppError");
 const {
+  getUnreadNotificationCount: getUnreadNotificationCountService,
   listNotifications: listNotificationsService,
 } = require("../services/notificationFeed.service");
 const {
@@ -67,6 +68,26 @@ exports.listNotifications = async (req, res, next) => {
       }),
       results: result.notifications.map(serializeNotification),
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+exports.getUnreadCount = async (req, res, next) => {
+  try {
+    const result = await getUnreadNotificationCountService(req.user._id);
+
+    if (
+      result?.status !== "counted" ||
+      !Number.isSafeInteger(result.count) ||
+      result.count < 0
+    ) {
+      throw new Error(
+        "Unexpected unread notification count service result.",
+      );
+    }
+
+    return res.status(200).json({ count: result.count });
   } catch (error) {
     return next(error);
   }
