@@ -21,4 +21,11 @@ router.get(
   notificationController.listNotifications,
 );
 
+router.get(
+  "/unread-count",
+  notificationThrottle,
+  requireAccessToken,
+  notificationController.getUnreadCount,
+);
+
 module.exports = router;
