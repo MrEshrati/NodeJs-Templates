@@ -9,6 +9,7 @@ const accountRouter = require("./routes/account.route");
 const passwordRouter = require("./routes/password.route");
 const emailRouter = require("./routes/email.route");
 const googleRouter = require("./routes/google.route");
+const notificationRouter = require("./routes/notification.route");
 const securityHeaders = require("./middlewares/securityHeaders.middleware");
 const requestId = require("./middlewares/requestId.middleware");
 const cors = require("./middlewares/cors.middleware");
@@ -46,6 +47,7 @@ app.use("/", accountRouter);
 app.use("/password", passwordRouter);
 app.use("/email", emailRouter);
 app.use("/google", googleRouter);
+app.use("/notifications", notificationRouter);
 
 app.use(notFound);
 app.use(errorHandler);
