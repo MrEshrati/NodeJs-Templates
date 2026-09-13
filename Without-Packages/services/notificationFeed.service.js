@@ -112,6 +112,19 @@ const listNotifications = async ({
   };
 };
 
+const getUnreadNotificationCount = async (userId) => {
+  const count = await Notification.countDocuments({
+    user: userId,
+    read: false,
+  });
+
+  return {
+    status: "counted",
+    count,
+  };
+};
+
 module.exports = {
+  getUnreadNotificationCount,
   listNotifications,
 };
