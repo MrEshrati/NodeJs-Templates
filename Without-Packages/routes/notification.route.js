@@ -35,4 +35,11 @@ router.post(
   notificationController.markAllRead,
 );
 
+router.post(
+  "/:notificationId/read",
+  notificationThrottle,
+  requireAccessToken,
+  notificationController.markNotificationRead,
+);
+
 module.exports = router;
