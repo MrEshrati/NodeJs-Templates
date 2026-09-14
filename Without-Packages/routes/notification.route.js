@@ -28,4 +28,11 @@ router.get(
   notificationController.getUnreadCount,
 );
 
+router.post(
+  "/read-all",
+  notificationThrottle,
+  requireAccessToken,
+  notificationController.markAllRead,
+);
+
 module.exports = router;
