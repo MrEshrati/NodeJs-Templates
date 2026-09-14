@@ -1,5 +1,8 @@
 const AppError = require("../errors/AppError");
 const {
+  markAllNotificationsRead: markAllNotificationsReadService,
+} = require("../services/notificationAction.service");
+const {
   getUnreadNotificationCount: getUnreadNotificationCountService,
   listNotifications: listNotificationsService,
 } = require("../services/notificationFeed.service");
@@ -88,6 +91,24 @@ exports.getUnreadCount = async (req, res, next) => {
     }
 
     return res.status(200).json({ count: result.count });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+exports.markAllRead = async (req, res, next) => {
+  try {
+    const result = await markAllNotificationsReadService(req.user._id);
+
+    if (
+      result?.status !== "updated" ||
+      !Number.isSafeInteger(result.markedRead) ||
+      result.markedRead < 0
+    ) {
+      throw new Error("Unexpected mark-all-read service result.");
+    }
+
+    return res.status(200).json({ marked_read: result.markedRead });
   } catch (error) {
     return next(error);
   }
