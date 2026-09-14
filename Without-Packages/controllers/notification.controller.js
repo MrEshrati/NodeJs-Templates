@@ -1,6 +1,7 @@
 const AppError = require("../errors/AppError");
 const {
   markAllNotificationsRead: markAllNotificationsReadService,
+  markNotificationRead: markNotificationReadService,
 } = require("../services/notificationAction.service");
 const {
   getUnreadNotificationCount: getUnreadNotificationCountService,
@@ -109,6 +110,33 @@ exports.markAllRead = async (req, res, next) => {
     }
 
     return res.status(200).json({ marked_read: result.markedRead });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+exports.markNotificationRead = async (req, res, next) => {
+  try {
+    const result = await markNotificationReadService({
+      userId: req.user._id,
+      notificationId: req.params.notificationId,
+    });
+
+    if (result?.status === "not_found") {
+      throw new AppError(
+        "No Notification matches the given query.",
+        404,
+        "not_found",
+      );
+    }
+
+    if (result?.status !== "updated") {
+      throw new Error(
+        "Unexpected mark-notification-read service status.",
+      );
+    }
+
+    return res.status(200).json(serializeNotification(result.notification));
   } catch (error) {
     return next(error);
   }
