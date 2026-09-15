@@ -42,4 +42,11 @@ router.post(
   notificationController.markNotificationRead,
 );
 
+router.delete(
+  "/:notificationId",
+  notificationThrottle,
+  requireAccessToken,
+  notificationController.deleteNotification,
+);
+
 module.exports = router;
