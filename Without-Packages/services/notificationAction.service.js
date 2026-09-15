@@ -1,6 +1,27 @@
 const mongoose = require("mongoose");
 const Notification = require("../models/notification.model");
 
+const deleteNotification = async ({ userId, notificationId } = {}) => {
+  if (!mongoose.isObjectIdOrHexString(notificationId)) {
+    return { status: "not_found" };
+  }
+
+  const result = await Notification.deleteOne({
+    _id: notificationId,
+    user: userId,
+  });
+
+  if (result.deletedCount === 1) {
+    return { status: "deleted" };
+  }
+
+  if (result.deletedCount === 0) {
+    return { status: "not_found" };
+  }
+
+  throw new Error("Unexpected notification deletion result.");
+};
+
 const markAllNotificationsRead = async (userId) => {
   const readAt = new Date();
   const result = await Notification.updateMany(
@@ -60,6 +81,7 @@ const markNotificationRead = async ({ userId, notificationId } = {}) => {
 };
 
 module.exports = {
+  deleteNotification,
   markAllNotificationsRead,
   markNotificationRead,
 };
