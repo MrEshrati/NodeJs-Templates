@@ -1,5 +1,6 @@
 const AppError = require("../errors/AppError");
 const {
+  deleteNotification: deleteNotificationService,
   markAllNotificationsRead: markAllNotificationsReadService,
   markNotificationRead: markNotificationReadService,
 } = require("../services/notificationAction.service");
@@ -137,6 +138,33 @@ exports.markNotificationRead = async (req, res, next) => {
     }
 
     return res.status(200).json(serializeNotification(result.notification));
+  } catch (error) {
+    return next(error);
+  }
+};
+
+exports.deleteNotification = async (req, res, next) => {
+  try {
+    const result = await deleteNotificationService({
+      userId: req.user._id,
+      notificationId: req.params.notificationId,
+    });
+
+    if (result?.status === "not_found") {
+      throw new AppError(
+        "No Notification matches the given query.",
+        404,
+        "not_found",
+      );
+    }
+
+    if (result?.status !== "deleted") {
+      throw new Error(
+        "Unexpected notification deletion service status.",
+      );
+    }
+
+    return res.status(204).send();
   } catch (error) {
     return next(error);
   }
