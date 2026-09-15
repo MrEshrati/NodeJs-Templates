@@ -10,6 +10,12 @@ const serializeNotification = (notification) => ({
   created_at: notification.createdAt.toISOString(),
 });
 
+const serializeNotificationPreference = (preference) => ({
+  push_enabled: preference.pushEnabled,
+  email_enabled: preference.emailEnabled,
+});
+
 module.exports = {
   serializeNotification,
+  serializeNotificationPreference,
 };
