@@ -4,6 +4,10 @@ const requireAccessToken = require("../middlewares/accessAuth.middleware");
 const createRequestThrottle = require("../middlewares/requestThrottle.middleware");
 const validateQuery = require("../middlewares/queryValidation.middleware");
 const validateRequest = require("../middlewares/validation.middleware");
+const {
+  validateDeviceRegistration,
+  validateDeviceUnregistration,
+} = require("../validators/deviceToken.validator");
 const validateNotificationList = require("../validators/notificationList.validator");
 const validateNotificationPreference = require(
   "../validators/notificationPreference.validator",
@@ -50,6 +54,22 @@ router.put(
   notificationThrottle,
   requireAccessToken,
   rejectPreferencePut,
+);
+
+router.post(
+  "/devices",
+  notificationThrottle,
+  requireAccessToken,
+  validateRequest(validateDeviceRegistration),
+  notificationController.registerDeviceToken,
+);
+
+router.delete(
+  "/devices",
+  notificationThrottle,
+  requireAccessToken,
+  validateRequest(validateDeviceUnregistration),
+  notificationController.unregisterDeviceToken,
 );
 
 router.get(
