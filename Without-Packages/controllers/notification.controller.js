@@ -9,7 +9,12 @@ const {
   listNotifications: listNotificationsService,
 } = require("../services/notificationFeed.service");
 const {
+  getNotificationPreferences: getNotificationPreferencesService,
+  updateNotificationPreferences: updateNotificationPreferencesService,
+} = require("../services/notificationPreference.service");
+const {
   serializeNotification,
+  serializeNotificationPreference,
 } = require("../utils/notification.utils");
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -165,6 +170,45 @@ exports.deleteNotification = async (req, res, next) => {
     }
 
     return res.status(204).send();
+  } catch (error) {
+    return next(error);
+  }
+};
+
+exports.getNotificationPreferences = async (req, res, next) => {
+  try {
+    const result = await getNotificationPreferencesService(req.user._id);
+
+    if (result?.status !== "retrieved" || !result.preference) {
+      throw new Error(
+        "Unexpected notification preference retrieval service result.",
+      );
+    }
+
+    return res
+      .status(200)
+      .json(serializeNotificationPreference(result.preference));
+  } catch (error) {
+    return next(error);
+  }
+};
+
+exports.updateNotificationPreferences = async (req, res, next) => {
+  try {
+    const result = await updateNotificationPreferencesService(
+      req.user._id,
+      req.validatedBody,
+    );
+
+    if (result?.status !== "updated" || !result.preference) {
+      throw new Error(
+        "Unexpected notification preference update service result.",
+      );
+    }
+
+    return res
+      .status(200)
+      .json(serializeNotificationPreference(result.preference));
   } catch (error) {
     return next(error);
   }
