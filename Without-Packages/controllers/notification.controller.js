@@ -1,5 +1,9 @@
 const AppError = require("../errors/AppError");
 const {
+  registerDeviceToken: registerDeviceTokenService,
+  unregisterDeviceToken: unregisterDeviceTokenService,
+} = require("../services/deviceToken.service");
+const {
   deleteNotification: deleteNotificationService,
   markAllNotificationsRead: markAllNotificationsReadService,
   markNotificationRead: markNotificationReadService,
@@ -13,6 +17,7 @@ const {
   updateNotificationPreferences: updateNotificationPreferencesService,
 } = require("../services/notificationPreference.service");
 const {
+  serializeDeviceToken,
   serializeNotification,
   serializeNotificationPreference,
 } = require("../utils/notification.utils");
@@ -209,6 +214,43 @@ exports.updateNotificationPreferences = async (req, res, next) => {
     return res
       .status(200)
       .json(serializeNotificationPreference(result.preference));
+  } catch (error) {
+    return next(error);
+  }
+};
+
+exports.registerDeviceToken = async (req, res, next) => {
+  try {
+    const result = await registerDeviceTokenService({
+      userId: req.user._id,
+      token: req.validatedBody.token,
+      platform: req.validatedBody.platform,
+    });
+
+    if (result?.status !== "registered" || !result.deviceToken) {
+      throw new Error("Unexpected device-token registration service result.");
+    }
+
+    return res.status(200).json(serializeDeviceToken(result.deviceToken));
+  } catch (error) {
+    return next(error);
+  }
+};
+
+exports.unregisterDeviceToken = async (req, res, next) => {
+  try {
+    const result = await unregisterDeviceTokenService({
+      userId: req.user._id,
+      token: req.validatedBody.token,
+    });
+
+    if (result?.status !== "unregistered") {
+      throw new Error(
+        "Unexpected device-token unregistration service result.",
+      );
+    }
+
+    return res.status(204).send();
   } catch (error) {
     return next(error);
   }
