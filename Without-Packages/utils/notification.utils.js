@@ -15,7 +15,16 @@ const serializeNotificationPreference = (preference) => ({
   email_enabled: preference.emailEnabled,
 });
 
+const serializeDeviceToken = (deviceToken) => ({
+  id: String(deviceToken._id),
+  token: deviceToken.token,
+  platform: deviceToken.platform,
+  created_at: deviceToken.createdAt.toISOString(),
+  updated_at: deviceToken.updatedAt.toISOString(),
+});
+
 module.exports = {
+  serializeDeviceToken,
   serializeNotification,
   serializeNotificationPreference,
 };
