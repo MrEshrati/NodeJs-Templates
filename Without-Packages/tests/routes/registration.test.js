@@ -33,6 +33,23 @@ test("profile router registers retrieval, partial update, and PUT rejection", ()
   ]);
 });
 
+test("notification router registers every documented endpoint in safe order", () => {
+  const router = require("../../routes/notification.route");
+
+  assert.deepEqual(routeMap(router), [
+    { path: "/preferences", methods: ["get"], handlers: 3 },
+    { path: "/preferences", methods: ["patch"], handlers: 4 },
+    { path: "/preferences", methods: ["put"], handlers: 3 },
+    { path: "/devices", methods: ["post"], handlers: 4 },
+    { path: "/devices", methods: ["delete"], handlers: 4 },
+    { path: "/", methods: ["get"], handlers: 4 },
+    { path: "/unread-count", methods: ["get"], handlers: 3 },
+    { path: "/read-all", methods: ["post"], handlers: 3 },
+    { path: "/:notificationId/read", methods: ["post"], handlers: 3 },
+    { path: "/:notificationId", methods: ["delete"], handlers: 3 },
+  ]);
+});
+
 test("account, password, email, and Google routers expose their contracts", () => {
   assert.deepEqual(routeMap(require("../../routes/account.route")), [
     { path: "/delete", methods: ["post"], handlers: 4 },
