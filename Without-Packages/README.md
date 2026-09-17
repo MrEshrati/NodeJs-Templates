@@ -1,10 +1,10 @@
-# Account API — Without Packages
+# Account and Notification API — Without Packages
 
-This project is a complete account-management API built with Node.js, Express,
-and MongoDB. The “without packages” approach means security-sensitive building
-blocks such as request validation, JWT signing and verification, OTP hashing,
-and throttling logic are implemented with Node.js platform APIs instead of
-extra convenience libraries.
+This project is a complete account-management and notification API built with
+Node.js, Express, and MongoDB. The “without packages” approach means
+security-sensitive building blocks such as request validation, JWT signing and
+verification, OTP hashing, cursor handling, and throttling logic are
+implemented with Node.js platform APIs instead of extra convenience libraries.
 
 Packages are still used where they provide the required platform integration:
 
@@ -23,9 +23,9 @@ Packages are still used where they provide the required platform integration:
 - Network access when testing Google authentication or Ethereal email previews
 - A Google OAuth web client ID for Google sign-in
 
-MongoDB transactions are used for password reset, password change, and email
-change operations. The example connection string assumes a local replica set
-named `rs0`.
+MongoDB transactions are used for password reset, password change, email
+change, and device-token registration operations. The example connection
+string assumes a local replica set named `rs0`.
 
 ## Quick start
 
@@ -106,7 +106,7 @@ config/       Startup configuration validation
 controllers/  HTTP response contracts and service-status mapping
 errors/       Structured application error type
 middlewares/  Authentication, validation, throttling, CORS, and security headers
-models/       Mongoose account and temporary security records
+models/       Mongoose account, notification, device, and security records
 routes/       Endpoint paths and middleware order
 services/     Account workflows and database operations
 utils/        JWT, token, and OTP cryptographic helpers
@@ -186,6 +186,62 @@ modification is partial and uses `PATCH`.
 | `POST /email/change` | Access token plus password or OTP | `new_email` and either `password` or `code` | Privacy-safe request that emails the new address. |
 | `POST /email/change/confirm` | Public | `key` | Changes the login email and revokes refresh sessions. |
 
+### Notifications
+
+Every notification endpoint requires an access token. Notification records are
+always scoped to the authenticated user. Attempts to read, modify, or delete a
+notification belonging to another user return `404 not_found` without exposing
+the record's owner.
+
+| Endpoint | Body or query | Result |
+| --- | --- | --- |
+| `GET /notifications` | Optional `unread`, `page_size`, and `cursor` query parameters | Returns the authenticated user's cursor-paginated notification feed. |
+| `GET /notifications/unread-count` | None | Returns `{"count": <number>}`. |
+| `POST /notifications/read-all` | None | Marks every unread notification as read and returns `marked_read`. |
+| `POST /notifications/:notificationId/read` | None | Marks one owned notification as read and returns it. |
+| `DELETE /notifications/:notificationId` | None | Deletes one owned notification and returns `204`. |
+| `GET /notifications/preferences` | None | Returns the user's push and email settings, creating their defaults when needed. |
+| `PATCH /notifications/preferences` | Optional `push_enabled` and `email_enabled` booleans | Partially updates notification channel settings. |
+| `POST /notifications/devices` | `token`, `platform` | Registers or updates a push-notification device token. |
+| `DELETE /notifications/devices` | `token` | Unregisters an owned device token and returns `204`. |
+
+The feed is ordered newest first. `unread=true` or `unread=1` filters it to
+unread records. `page_size` defaults to 20 and is limited to 100. The `cursor`
+value is opaque: clients must copy it from a returned pagination URL instead of
+constructing or modifying it. An invalid cursor returns `404 not_found`.
+
+A feed response contains absolute `next` and `previous` URLs, or `null` when a
+direction is unavailable, plus the current `results` array:
+
+```json
+{
+  "next": "http://localhost:3000/notifications?page_size=2&cursor=opaque-value",
+  "previous": null,
+  "results": [
+    {
+      "id": "notification-id",
+      "type": "account.updated",
+      "title": "Account updated",
+      "body": "Your account was updated.",
+      "data": {},
+      "read": false,
+      "read_at": null,
+      "created_at": "2026-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+New notification preferences default to both `push_enabled: true` and
+`email_enabled: true`. Preference updates are partial and preserve explicit
+`false` values.
+
+Device platforms are `ios` and `android`. A device token is globally unique;
+registering it again updates its owning user and platform. Each user keeps at
+most 20 device tokens, with the least recently updated excess tokens removed
+inside the registration transaction. Unregistering an absent owned token is
+idempotent and still returns `204`.
+
 ## Token and code lifetimes
 
 | Item | Lifetime or policy |
@@ -205,14 +261,18 @@ cost factor of 12.
 
 ## Request throttling
 
-Every documented endpoint allows 10 requests in its configured window for one
-client identifier:
+Account endpoints allow 10 requests in their configured window for one client
+identifier:
 
 - One-minute window: login, token refresh, logout, Google sign-in, profile
   retrieval, profile modification, password change, and account deactivation.
 - One-hour window: registration, email verification, verification resend, OTP
   request and verification, password-reset request and confirmation, and
   email-change request and confirmation.
+
+Notification endpoints allow 120 requests per minute for one client
+identifier. This shared notification limit covers feed reads, actions,
+preference operations, and device registration or removal.
 
 Throttled responses include `Retry-After`. Request and login identifiers are
 stored as keyed HMACs rather than raw email or client values.
@@ -300,13 +360,15 @@ npm run test:coverage:all
 The E2E tests run sequentially against the shared test database and skip
 safely when `TEST_DB_URL` is absent. Email delivery and Google token
 verification are mocked, but the HTTP routes, services, password hashing,
-throttles, token creation, and MongoDB records are real. The regular `npm test`
-command does not discover the `.e2e.js` files.
+throttles, token creation, notification ownership and pagination, and MongoDB
+records are real. The regular `npm test` command does not discover the
+`.e2e.js` files.
 
 The tests use Node.js's built-in test runner. They cover validators,
 cryptographic utilities, middleware, Mongoose schemas, route registration,
-service boundaries, startup configuration, and real HTTP error and validation
-paths. Unit and HTTP tests do not require MongoDB, Google, or email access.
+service boundaries, startup configuration, notification workflows, and real
+HTTP error and validation paths. Unit and HTTP tests do not require MongoDB,
+Google, or email access.
 
 The repository workflow at `.github/workflows/without-packages-tests.yml` runs
 two independent Node.js 24 jobs whenever this project or its workflow changes

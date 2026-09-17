@@ -39,6 +39,18 @@ const documentedEnvironmentKeys = [
 
 const documentedHealthEndpoints = ["GET /health/live", "GET /health/ready"];
 
+const documentedNotificationEndpoints = [
+  "GET /notifications",
+  "GET /notifications/unread-count",
+  "POST /notifications/read-all",
+  "POST /notifications/:notificationId/read",
+  "DELETE /notifications/:notificationId",
+  "GET /notifications/preferences",
+  "PATCH /notifications/preferences",
+  "POST /notifications/devices",
+  "DELETE /notifications/devices",
+];
+
 test("README documents every account API operation", () => {
   assert.equal(documentedEndpoints.length, 17);
 
@@ -49,6 +61,14 @@ test("README documents every account API operation", () => {
 
 test("README documents every health endpoint", () => {
   for (const endpoint of documentedHealthEndpoints) {
+    assert.ok(readme.includes(`\`${endpoint}\``), endpoint);
+  }
+});
+
+test("README documents every notification API operation", () => {
+  assert.equal(documentedNotificationEndpoints.length, 9);
+
+  for (const endpoint of documentedNotificationEndpoints) {
     assert.ok(readme.includes(`\`${endpoint}\``), endpoint);
   }
 });
@@ -79,6 +99,9 @@ test("README documents setup, security, lifetimes, and testing", () => {
     "X-Powered-By",
     "X-Request-Id",
     "Cache-Control: no-store",
+    "page_size",
+    "120 requests per minute",
+    "20 device tokens",
     ".github/workflows/without-packages-tests.yml",
     "private",
   ];
