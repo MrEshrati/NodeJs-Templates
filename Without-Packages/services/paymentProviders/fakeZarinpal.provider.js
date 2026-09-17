@@ -2,6 +2,7 @@ const { randomBytes, randomInt } = require("node:crypto");
 
 const START_PAY_URL = "https://payment.zarinpal.com/pg/StartPay";
 const SUPPORTED_OUTCOMES = new Set(["succeeded", "failed"]);
+const AUTHORITY_PATTERN = /^[A-Za-z0-9_-]{36}$/;
 
 const createAuthority = () =>
   `A${randomBytes(27).toString("base64url").slice(0, 35)}`;
@@ -35,6 +36,30 @@ const createPayment = async (input = {}) => {
       redirectUrl,
     },
   };
+};
+
+const getCheckout = (payment) => {
+  if (
+    payment === null ||
+    typeof payment !== "object" ||
+    Array.isArray(payment) ||
+    payment.provider !== "zarinpal" ||
+    typeof payment.externalId !== "string" ||
+    !AUTHORITY_PATTERN.test(payment.externalId) ||
+    payment.providerData === null ||
+    typeof payment.providerData !== "object" ||
+    Array.isArray(payment.providerData)
+  ) {
+    throw new TypeError("payment must contain fake ZarinPal checkout data.");
+  }
+
+  const expectedRedirectUrl = `${START_PAY_URL}/${payment.externalId}`;
+
+  if (payment.providerData.redirect_url !== expectedRedirectUrl) {
+    throw new TypeError("payment must contain fake ZarinPal checkout data.");
+  }
+
+  return { redirectUrl: expectedRedirectUrl };
 };
 
 const assertSimulationInput = (payment, outcome) => {
@@ -121,6 +146,8 @@ const simulatePayment = async ({ payment, outcome } = {}) => {
 };
 
 module.exports = {
+  provider: "zarinpal",
   createPayment,
+  getCheckout,
   simulatePayment,
 };

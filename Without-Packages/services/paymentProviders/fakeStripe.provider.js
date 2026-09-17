@@ -41,6 +41,27 @@ const createPayment = async (input = {}) => {
   };
 };
 
+const getCheckout = (payment) => {
+  if (
+    payment === null ||
+    typeof payment !== "object" ||
+    Array.isArray(payment) ||
+    payment.provider !== "stripe" ||
+    payment.providerData === null ||
+    typeof payment.providerData !== "object" ||
+    Array.isArray(payment.providerData) ||
+    typeof payment.providerData.client_secret !== "string" ||
+    payment.providerData.client_secret === ""
+  ) {
+    throw new TypeError("payment must contain fake Stripe checkout data.");
+  }
+
+  return {
+    clientSecret: payment.providerData.client_secret,
+    publishableKey: FAKE_PUBLISHABLE_KEY,
+  };
+};
+
 const assertSimulationInput = (payment, outcome) => {
   if (
     payment === null ||
@@ -107,6 +128,8 @@ const simulatePayment = async ({ payment, outcome } = {}) => {
 };
 
 module.exports = {
+  provider: "stripe",
   createPayment,
+  getCheckout,
   simulatePayment,
 };
