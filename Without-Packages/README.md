@@ -41,15 +41,16 @@ Create the local environment file:
 Copy-Item .env.example .env
 ```
 
-Replace every `replace-me` value. Generate a different secret for each of the
-four secret variables:
+Replace `GOOGLE_CLIENT_ID` and the four account-secret placeholders. Generate a
+different value for each account secret:
 
 ```powershell
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
 Run that command separately for each secret. Do not reuse one value across
-multiple variables.
+multiple variables. Payment-provider credentials may remain as placeholders in
+fake mode, but must be replaced before enabling live payments.
 
 Start the API:
 
@@ -86,10 +87,18 @@ request or inactive socket, and 5 seconds for an idle keep-alive connection.
 | `OTP_SECRET` | HMAC secret for OTP codes; at least 32 UTF-8 bytes. |
 | `LOGIN_THROTTLE_SECRET` | HMAC secret used to protect login-throttle identifiers; at least 32 UTF-8 bytes. |
 | `REQUEST_THROTTLE_SECRET` | HMAC secret used to protect request-throttle identifiers; at least 32 UTF-8 bytes. |
+| `PAYMENT_PROVIDER` | Active payment integration: `stripe` or `zarinpal`. |
+| `PAYMENT_FAKE_MODE` | Strict `true` or `false`; enables development payment simulation when true. |
+| `STRIPE_SECRET_KEY` | Stripe server credential required for live Stripe payments. |
+| `STRIPE_PUBLISHABLE_KEY` | Stripe client key returned when creating live Stripe payments. |
+| `STRIPE_WEBHOOK_SECRET` | Stripe signature secret required for live webhook verification. |
+| `ZARINPAL_MERCHANT_ID` | Merchant identifier required for live ZarinPal payments. |
+| `ZARINPAL_CALLBACK_URL` | HTTP or HTTPS callback URL required for live ZarinPal payments. |
 
-The server validates all configuration before connecting to MongoDB. Secret
-values are never included in configuration error messages. The real `.env`
-file is ignored by Git; only `.env.example` should be committed.
+The server validates all configuration before connecting to MongoDB. Live
+credentials are required only for the selected provider when fake mode is
+disabled. Secret values are never included in configuration error messages.
+The real `.env` file is ignored by Git; only `.env.example` should be committed.
 
 The test database helper refuses to connect to or clear a database whose name
 does not end with `_test`. It deletes documents between tests without dropping

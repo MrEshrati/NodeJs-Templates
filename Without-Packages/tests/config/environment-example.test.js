@@ -14,6 +14,13 @@ const DOCUMENTED_KEYS = [
   "OTP_SECRET",
   "LOGIN_THROTTLE_SECRET",
   "REQUEST_THROTTLE_SECRET",
+  "PAYMENT_PROVIDER",
+  "PAYMENT_FAKE_MODE",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_PUBLISHABLE_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "ZARINPAL_MERCHANT_ID",
+  "ZARINPAL_CALLBACK_URL",
 ];
 
 const SECRET_KEYS = [
@@ -21,6 +28,10 @@ const SECRET_KEYS = [
   "OTP_SECRET",
   "LOGIN_THROTTLE_SECRET",
   "REQUEST_THROTTLE_SECRET",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_PUBLISHABLE_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "ZARINPAL_MERCHANT_ID",
 ];
 
 const parseEnvironmentExample = () => {
@@ -65,6 +76,12 @@ test("environment example contains only non-secret development values", () => {
   assert.match(values.TEST_DB_URL, /replicaSet=rs0/);
   assert.equal(values.FRONTEND_URL, "http://localhost:5173");
   assert.equal(values.GOOGLE_CLIENT_ID, "replace-me");
+  assert.equal(values.PAYMENT_PROVIDER, "stripe");
+  assert.equal(values.PAYMENT_FAKE_MODE, "true");
+  assert.equal(
+    values.ZARINPAL_CALLBACK_URL,
+    "http://localhost:3000/payments/zarinpal/callback",
+  );
 
   for (const key of SECRET_KEYS) {
     assert.equal(values[key], "replace-me");

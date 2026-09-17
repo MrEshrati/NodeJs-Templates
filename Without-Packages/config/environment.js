@@ -5,6 +5,17 @@ const SECRET_NAMES = [
   "LOGIN_THROTTLE_SECRET",
   "REQUEST_THROTTLE_SECRET",
 ];
+const PAYMENT_PROVIDERS = new Set(["stripe", "zarinpal"]);
+
+const assertEnvironmentObject = (environment) => {
+  if (
+    environment === null ||
+    typeof environment !== "object" ||
+    Array.isArray(environment)
+  ) {
+    throw new TypeError("environment must be an object.");
+  }
+};
 
 const getRequiredString = (environment, name) => {
   const value = environment[name];
@@ -59,14 +70,90 @@ const validateSecret = (environment, name) => {
   }
 };
 
-const validateEnvironment = (environment = process.env) => {
-  if (
-    environment === null ||
-    typeof environment !== "object" ||
-    Array.isArray(environment)
-  ) {
-    throw new TypeError("environment must be an object.");
+const validatePaymentProvider = (environment) => {
+  const provider = getRequiredString(
+    environment,
+    "PAYMENT_PROVIDER",
+  ).toLowerCase();
+
+  if (!PAYMENT_PROVIDERS.has(provider)) {
+    throw new Error('PAYMENT_PROVIDER must be "stripe" or "zarinpal".');
   }
+
+  return provider;
+};
+
+const validatePaymentFakeMode = (environment) => {
+  const rawFakeMode = getRequiredString(environment, "PAYMENT_FAKE_MODE");
+
+  if (rawFakeMode !== "true" && rawFakeMode !== "false") {
+    throw new Error('PAYMENT_FAKE_MODE must be "true" or "false".');
+  }
+
+  return rawFakeMode === "true";
+};
+
+const validateCallbackUrl = (environment, name) => {
+  const rawUrl = getRequiredString(environment, name);
+  let url;
+
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new Error(`${name} must be a valid HTTP or HTTPS URL.`);
+  }
+
+  if (
+    (url.protocol !== "http:" && url.protocol !== "https:") ||
+    url.username !== "" ||
+    url.password !== ""
+  ) {
+    throw new Error(`${name} must be a valid HTTP or HTTPS URL.`);
+  }
+
+  return rawUrl;
+};
+
+const validatePaymentEnvironment = (environment = process.env) => {
+  assertEnvironmentObject(environment);
+
+  const provider = validatePaymentProvider(environment);
+  const fakeMode = validatePaymentFakeMode(environment);
+  let credentials = null;
+
+  if (!fakeMode && provider === "stripe") {
+    credentials = {
+      secretKey: getRequiredString(environment, "STRIPE_SECRET_KEY"),
+      publishableKey: getRequiredString(
+        environment,
+        "STRIPE_PUBLISHABLE_KEY",
+      ),
+      webhookSecret: getRequiredString(
+        environment,
+        "STRIPE_WEBHOOK_SECRET",
+      ),
+    };
+  }
+
+  if (!fakeMode && provider === "zarinpal") {
+    credentials = {
+      merchantId: getRequiredString(environment, "ZARINPAL_MERCHANT_ID"),
+      callbackUrl: validateCallbackUrl(
+        environment,
+        "ZARINPAL_CALLBACK_URL",
+      ),
+    };
+  }
+
+  return {
+    provider,
+    fakeMode,
+    credentials,
+  };
+};
+
+const validateEnvironment = (environment = process.env) => {
+  assertEnvironmentObject(environment);
 
   const port = validatePort(environment);
   const databaseUrl = getRequiredString(environment, "DB_URL");
@@ -78,12 +165,16 @@ const validateEnvironment = (environment = process.env) => {
     validateSecret(environment, name);
   }
 
+  const payment = validatePaymentEnvironment(environment);
+
   return {
     port,
     databaseUrl,
+    payment,
   };
 };
 
 module.exports = {
   validateEnvironment,
+  validatePaymentEnvironment,
 };

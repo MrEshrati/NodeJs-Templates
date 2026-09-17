@@ -35,6 +35,13 @@ const documentedEnvironmentKeys = [
   "OTP_SECRET",
   "LOGIN_THROTTLE_SECRET",
   "REQUEST_THROTTLE_SECRET",
+  "PAYMENT_PROVIDER",
+  "PAYMENT_FAKE_MODE",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_PUBLISHABLE_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "ZARINPAL_MERCHANT_ID",
+  "ZARINPAL_CALLBACK_URL",
 ];
 
 const documentedHealthEndpoints = ["GET /health/live", "GET /health/ready"];
