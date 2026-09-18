@@ -10,6 +10,7 @@ const passwordRouter = require("./routes/password.route");
 const emailRouter = require("./routes/email.route");
 const googleRouter = require("./routes/google.route");
 const notificationRouter = require("./routes/notification.route");
+const createPaymentRouter = require("./routes/payment.route");
 const securityHeaders = require("./middlewares/securityHeaders.middleware");
 const requestId = require("./middlewares/requestId.middleware");
 const cors = require("./middlewares/cors.middleware");
@@ -18,6 +19,8 @@ const errorHandler = require("./middlewares/errorHandler.middleware");
 const { validateEnvironment } = require("./config/environment");
 
 const app = express();
+const paymentRouterHost = express.Router();
+let configuredPaymentRoutes = null;
 const REQUEST_BODY_LIMIT = "16kb";
 const HTTP_TIMEOUTS = Object.freeze({
   headers: 10_000,
@@ -48,12 +51,38 @@ app.use("/password", passwordRouter);
 app.use("/email", emailRouter);
 app.use("/google", googleRouter);
 app.use("/notifications", notificationRouter);
+app.use("/", paymentRouterHost);
 
 app.use(notFound);
 app.use(errorHandler);
 
+const configurePaymentRoutes = (paymentConfig) => {
+  if (configuredPaymentRoutes) {
+    if (
+      configuredPaymentRoutes.provider === paymentConfig?.provider &&
+      configuredPaymentRoutes.fakeMode === paymentConfig?.fakeMode
+    ) {
+      return;
+    }
+
+    throw new Error(
+      "Payment routes are already configured with different settings.",
+    );
+  }
+
+  const paymentRouter = createPaymentRouter(paymentConfig);
+
+  paymentRouterHost.use(paymentRouter);
+  configuredPaymentRoutes = Object.freeze({
+    provider: paymentConfig.provider,
+    fakeMode: paymentConfig.fakeMode,
+  });
+};
+
 const startServer = async () => {
-  const { port, databaseUrl } = validateEnvironment();
+  const { port, databaseUrl, payment } = validateEnvironment();
+
+  configurePaymentRoutes(payment);
 
   await mongoose.connect(databaseUrl);
 
@@ -186,6 +215,7 @@ if (require.main === module) {
 
 module.exports = {
   app,
+  configurePaymentRoutes,
   registerShutdownHandlers,
   startServer,
   stopServer,
