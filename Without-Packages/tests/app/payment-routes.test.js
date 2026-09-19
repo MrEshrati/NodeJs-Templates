@@ -11,6 +11,15 @@ const accountEmailWorkerPath = fromProject(
   "workers",
   "accountEmail.worker.js",
 );
+const TEST_FRONTEND_URL = "https://frontend.example";
+const originalFrontendUrl = process.env.FRONTEND_URL;
+
+process.env.FRONTEND_URL = TEST_FRONTEND_URL;
+
+test.after(() => {
+  if (originalFrontendUrl === undefined) delete process.env.FRONTEND_URL;
+  else process.env.FRONTEND_URL = originalFrontendUrl;
+});
 
 const DEFAULT_PAYMENT_CONFIG = Object.freeze({
   provider: "stripe",
