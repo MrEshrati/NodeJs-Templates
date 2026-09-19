@@ -4,12 +4,11 @@ const { readFileSync } = require("node:fs");
 const { resolve } = require("node:path");
 
 const projectRoot = resolve(__dirname, "..", "..");
-const repositoryRoot = resolve(projectRoot, "..");
 const workflowPath = resolve(
-  repositoryRoot,
+  projectRoot,
   ".github",
   "workflows",
-  "without-packages-tests.yml",
+  "ci.yml",
 );
 const workflow = readFileSync(workflowPath, "utf8");
 
@@ -35,15 +34,12 @@ test("CI runs database workflows against a guarded MongoDB replica set", () => {
   assert.match(workflow, /run:\s*npm run test:coverage:all/);
 });
 
-test("CI runs when the project or its workflow changes", () => {
+test("CI runs from the repository root on pushes and pull requests", () => {
+  assert.match(workflow, /^  push:/m);
+  assert.match(workflow, /^  pull_request:/m);
+  assert.doesNotMatch(workflow, /working-directory:/);
   assert.equal(
-    workflow.match(/- "Without-Packages\/\*\*"/g)?.length,
-    2,
-  );
-  assert.equal(
-    workflow.match(
-      /- "\.github\/workflows\/without-packages-tests\.yml"/g,
-    )?.length,
+    workflow.match(/cache-dependency-path:\s*package-lock\.json/g)?.length,
     2,
   );
 });

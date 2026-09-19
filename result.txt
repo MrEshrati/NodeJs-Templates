@@ -1,12 +1,12 @@
-# Security Remediation Verification — Without-Packages API
+# Security Remediation Verification — Node.js API Template
 
 Date: 2026-09-19
 
 ## 1. Summary
 
-Scope: follow-up review of the `Without-Packages` Node.js/Express API at commit `cdd1e21`, focused on all seven findings from the original secure-code audit, the four security-remediation commits and subsequent CI test-fix commit, their regression tests, current dependency metadata, and `.github/workflows/without-packages-tests.yml`.
+Scope: follow-up review of the Node.js/Express API template at commit `cdd1e21`, focused on all seven findings from the original secure-code audit, the four security-remediation commits and subsequent CI test-fix commit, their regression tests, current dependency metadata, and the repository CI workflow.
 
-Method: read-only manual review using the secure-code-auditor methodology. The review retraced the affected HTTP and worker entry points through validation, authentication, queue, database, email, payment-provider, logging, and CI sinks. It inspected the current implementation and regression tests, ran the complete package-free and MongoDB-backed suites, enforced the repository's coverage thresholds, and ran the production dependency audit. No application code was changed. Credential-purpose files such as `.env` were not opened.
+Method: read-only manual review using the secure-code-auditor methodology. The review retraced the affected HTTP and worker entry points through validation, authentication, queue, database, email, payment-provider, logging, and CI sinks. It inspected the current implementation and regression tests, ran the complete unit/integration and MongoDB-backed suites, enforced the repository's coverage thresholds, and ran the production dependency audit. No application code was changed. Credential-purpose files such as `.env` were not opened.
 
 Open findings: 0 Critical, 0 High, 3 Medium, 1 Low.
 
@@ -45,7 +45,7 @@ Verification completed successfully:
 
 ### [MEDIUM] CI executes actions and a service image through mutable tags
 
-- Location: `.github/workflows/without-packages-tests.yml:30-45,59-78`
+- Location: `.github/workflows/ci.yml:20-35,45-64`
 - Category: Software supply-chain integrity | CWE-494, CWE-829 | OWASP A03:2025 Software Supply Chain Failures
 - Confidence: High (100%)
 - Problem: Both jobs execute `actions/checkout@v7` and `actions/setup-node@v7`, and the MongoDB job starts `mongo:8.0`. These are mutable references that can resolve to different code without a repository diff.

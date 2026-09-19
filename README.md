@@ -1,13 +1,14 @@
-# Account, Notification, and Payment API — Without Packages
+# Node.js Account, Notification, and Payment API Template
 
-This project is a complete account-management, notification, and payment API
-built with Node.js, Express, and MongoDB. The “without packages” approach means
-security-sensitive building blocks such as request validation, JWT signing and
-verification, OTP hashing, cursor handling, throttling logic, and payment HTTP
-adapters are implemented with Node.js platform APIs instead of extra
-convenience libraries.
+[![API CI](https://github.com/MrEshrati/NodeJs-Templates/actions/workflows/ci.yml/badge.svg)](https://github.com/MrEshrati/NodeJs-Templates/actions/workflows/ci.yml)
 
-Packages are still used where they provide the required platform integration:
+This repository is a complete account-management, notification, and payment
+API template built with Node.js, Express, and MongoDB. It favors Node.js
+platform APIs for security-sensitive building blocks such as request
+validation, JWT signing and verification, OTP hashing, cursor handling,
+throttling, and payment HTTP adapters.
+
+Focused dependencies provide the required platform integrations:
 
 - Express for HTTP routing
 - Mongoose for MongoDB access and transactions
@@ -15,6 +16,15 @@ Packages are still used where they provide the required platform integration:
 - Nodemailer for development email delivery
 - Google Auth Library for official Google ID-token verification
 - dotenv for local environment loading
+
+## Features
+
+- Password, OTP, and Google authentication with rotating refresh sessions
+- Email verification, password recovery, email change, and account deactivation
+- User-scoped notification feeds, preferences, and device registration
+- Stripe and ZarinPal integrations with fake development providers
+- Layered throttling, consistent errors, CORS, security headers, and health checks
+- Unit, integration, and MongoDB-backed end-to-end tests with coverage gates
 
 ## Requirements
 
@@ -122,7 +132,7 @@ models/       Mongoose account, notification, device, and security records
 routes/       Endpoint paths and middleware order
 services/     Account workflows and database operations
 utils/        JWT, token, and OTP cryptographic helpers
-validators/   Package-free request validation and normalization
+validators/   Request validation and normalization
 workers/      Durable account-email queue processing
 tests/        Unit, schema, route-contract, and HTTP integration tests
 app.js        Express construction and explicit server startup
@@ -471,14 +481,12 @@ live Stripe and ZarinPal requests and responses are tested with injected mock
 HTTP functions. Unit and HTTP tests do not require MongoDB, Google, email, or
 payment-provider access.
 
-The repository workflow at `.github/workflows/without-packages-tests.yml` runs
-two independent Node.js 24 jobs whenever this project or its workflow changes
-in a push or pull request. Both jobs install the locked dependencies with
-`npm ci`:
+The repository workflow at `.github/workflows/ci.yml` runs two independent
+Node.js 24 jobs for pushes and pull requests. Both jobs install the locked
+dependencies with `npm ci`:
 
-- The regular job audits production dependencies, then runs the package-free
-  test suite with `npm test`. It does not require a database or external
-  credentials.
+- The regular job audits production dependencies, then runs the main test suite
+  with `npm test`. It does not require a database or external credentials.
 - The E2E job starts an ephemeral MongoDB 8 single-node replica set, supplies a
   guarded `TEST_DB_URL` whose database name ends in `_test`, and runs the
   regular and database-backed suites with `npm run test:coverage:all`. The job

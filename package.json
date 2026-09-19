@@ -1,10 +1,26 @@
 {
-  "name": "without-packages",
+  "name": "nodejs-api-template",
   "version": "1.0.0",
   "private": true,
-  "description": "",
+  "description": "Account, authentication, notification, and payment API template for Node.js, Express, and MongoDB.",
+  "keywords": [
+    "nodejs",
+    "express",
+    "mongodb",
+    "api",
+    "authentication",
+    "notifications",
+    "payments"
+  ],
   "license": "ISC",
-  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MrEshrati/NodeJs-Templates.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MrEshrati/NodeJs-Templates/issues"
+  },
+  "homepage": "https://github.com/MrEshrati/NodeJs-Templates#readme",
   "type": "commonjs",
   "main": "app.js",
   "engines": {

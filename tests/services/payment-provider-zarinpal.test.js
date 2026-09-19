@@ -170,7 +170,7 @@ test("ZarinPal payment creation sends the exact approved request", async () => {
   assert.equal(calls[0].options.method, "POST");
   assert.deepEqual(calls[0].options.headers, {
     "Content-Type": "application/json",
-    "User-Agent": "Without-Packages Payment API",
+    "User-Agent": "Node.js API Template",
   });
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     merchant_id: "merchant-1",
@@ -318,7 +318,7 @@ test("ZarinPal verification sends the exact request and accepts success codes", 
     assert.equal(calls[0].options.method, "POST");
     assert.deepEqual(calls[0].options.headers, {
       "Content-Type": "application/json",
-      "User-Agent": "Without-Packages Payment API",
+      "User-Agent": "Node.js API Template",
     });
     assert.deepEqual(JSON.parse(calls[0].options.body), {
       merchant_id: "merchant-1",

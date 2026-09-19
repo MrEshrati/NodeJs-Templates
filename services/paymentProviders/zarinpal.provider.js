@@ -130,7 +130,7 @@ const requestProvider = async ({ fetchImpl, timeoutMs, url, body }) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": "Without-Packages Payment API",
+        "User-Agent": "Node.js API Template",
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),

@@ -145,7 +145,7 @@ test("README documents setup, security, lifetimes, and testing", () => {
     "page_size",
     "120 requests per minute",
     "20 device tokens",
-    ".github/workflows/without-packages-tests.yml",
+    ".github/workflows/ci.yml",
     "private",
   ];
 

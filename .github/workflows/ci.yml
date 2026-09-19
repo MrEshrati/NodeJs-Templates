@@ -1,20 +1,14 @@
-name: Without-Packages tests
+name: API CI
 
 on:
   push:
-    paths:
-      - "Without-Packages/**"
-      - ".github/workflows/without-packages-tests.yml"
   pull_request:
-    paths:
-      - "Without-Packages/**"
-      - ".github/workflows/without-packages-tests.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: without-packages-tests-${{ github.workflow }}-${{ github.ref }}
+  group: api-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -22,10 +16,6 @@ jobs:
     name: Node.js 24
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
-    defaults:
-      run:
-        working-directory: Without-Packages
 
     steps:
       - name: Check out repository
@@ -36,7 +26,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: Without-Packages/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install locked dependencies
         run: npm ci
@@ -52,10 +42,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    defaults:
-      run:
-        working-directory: Without-Packages
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -65,7 +51,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: Without-Packages/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install locked dependencies
         run: npm ci
@@ -73,40 +59,40 @@ jobs:
       - name: Start MongoDB replica set
         run: |
           docker run --detach \
-            --name without-packages-mongodb \
+            --name node-api-mongodb \
             --publish 27017:27017 \
             mongo:8.0 \
             --replSet rs0 \
             --bind_ip_all
 
           for attempt in {1..30}; do
-            if docker exec without-packages-mongodb \
+            if docker exec node-api-mongodb \
               mongosh --quiet --eval \
               'quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)' > /dev/null 2>&1; then
               break
             fi
 
             if [ "$attempt" -eq 30 ]; then
-              docker logs without-packages-mongodb
+              docker logs node-api-mongodb
               exit 1
             fi
 
             sleep 2
           done
 
-          docker exec without-packages-mongodb \
+          docker exec node-api-mongodb \
             mongosh --quiet --eval \
             'rs.initiate({_id: "rs0", members: [{_id: 0, host: "localhost:27017"}]})'
 
           for attempt in {1..30}; do
-            if docker exec without-packages-mongodb \
+            if docker exec node-api-mongodb \
               mongosh --quiet --eval \
               'quit(db.hello().isWritablePrimary ? 0 : 1)' > /dev/null 2>&1; then
               break
             fi
 
             if [ "$attempt" -eq 30 ]; then
-              docker logs without-packages-mongodb
+              docker logs node-api-mongodb
               exit 1
             fi
 
