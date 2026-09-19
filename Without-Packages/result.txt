@@ -1,110 +1,98 @@
-# Security Audit Result — Without-Packages API
+# Security Remediation Verification — Without-Packages API
 
 Date: 2026-09-19
 
 ## 1. Summary
 
-Scope: the `Without-Packages` Node.js/Express API, its Mongoose models, authentication and payment flows, tests relevant to identified risks, dependency metadata, and `.github/workflows/without-packages-tests.yml`.
+Scope: follow-up review of the `Without-Packages` Node.js/Express API at commit `cdd1e21`, focused on all seven findings from the original secure-code audit, the four security-remediation commits and subsequent CI test-fix commit, their regression tests, current dependency metadata, and `.github/workflows/without-packages-tests.yml`.
 
-Method: read-only manual review using the secure-code-auditor methodology. The review inventoried HTTP entry points, followed untrusted input through validation and services to database, authentication, email, payment-provider, logging, and CI sinks, and checked the controls and tests surrounding the strongest hypotheses. No application code was changed. Credential-purpose files such as `.env` were not opened.
+Method: read-only manual review using the secure-code-auditor methodology. The review retraced the affected HTTP and worker entry points through validation, authentication, queue, database, email, payment-provider, logging, and CI sinks. It inspected the current implementation and regression tests, ran the complete package-free and MongoDB-backed suites, enforced the repository's coverage thresholds, and ran the production dependency audit. No application code was changed. Credential-purpose files such as `.env` were not opened.
 
-Findings: 0 Critical, 0 High, 6 Medium, 1 Low.
+Open findings: 0 Critical, 0 High, 3 Medium, 1 Low.
 
-Notable controls already present include generic client-facing error responses, request-body size limits, explicit route validation, active-user checks on protected requests, hashed-at-rest refresh/verification/reset/OTP artifacts, refresh-session revocation on security-sensitive account changes, user-scoped database queries, and a gated production-dependency audit in CI.
+Remediation outcome: three original findings are closed. The payment finding is substantially mitigated—requests are now claimed before the provider call, bound to a canonical fingerprint, scoped per user at the provider, and protected against concurrent duplicate effects—but remains open in narrowed form because interrupted or ambiguous provider calls have no reconciliation path. Password policy, immutable CI references, and durable security-event logging remain open.
+
+Verification completed successfully:
+
+- `npm test`: 390 passed, 0 failed;
+- `npm run test:coverage:all`: 404 passed, 0 failed;
+- coverage: 93.91% lines, 87.84% branches, 98.16% functions;
+- `npm run audit:prod`: 0 known production dependency vulnerabilities.
 
 ## 2. Findings
 
-### [MEDIUM] Authentication and recovery credentials are exposed through mail-preview logs
+### Open findings
 
-- Location: `services/email.service.js:5-38,40-76,118-147,151-184,210-243`; `controllers/auth.controller.js:69-70,116-117`; `controllers/otp.controller.js:16-17`; `controllers/passwordReset.controller.js:16-17`; `controllers/emailChange.controller.js:45-46`; `README.md:356-372`
-- Category: Sensitive data in logs | CWE-532 | OWASP A09:2025 Security Logging and Alerting Failures
-- Confidence: High (95%)
-- Problem: Every runtime uses an automatically created Ethereal mailbox. The service places email-verification tokens, OTP codes, password-reset tokens, and email-change tokens in messages, returns Ethereal's preview URL, and controllers print that URL. The README calls this development behavior, but there is no runtime guard that prevents the same transport and logging in a non-development deployment.
-- Evidence: A request causes a code or token to be placed in an Ethereal message (`email.service.js`), `nodemailer.getTestMessageUrl(info)` returns the message-access URL, and the controller writes it to process logs. A person or system that can read those logs can open the message and redeem its credential. A prose deployment warning is not an enforced boundary.
-- Impact: Access to aggregated application logs can become account access: an observer can use a live OTP or recovery/change link before its one-hour or ten-minute expiry. A real deployment would also silently send security mail to Ethereal rather than to the user's mailbox.
-- Fix: Make the mail transport an explicit configuration choice. Refuse to start in production while the Ethereal transport or preview logging is enabled. Never place preview URLs, codes, message bodies, or token-bearing links in production logs; keep any local preview output behind an explicit local-development-only flag and isolated developer console.
+### [MEDIUM] Interrupted payment creation has no provider reconciliation path
 
-### [MEDIUM] Recovery and verification endpoints reveal account existence through response time
-
-- Location: `services/passwordReset.service.js:77-126`; `services/otp.service.js:77-119`; `services/emailVerification.service.js:135-163`; `controllers/passwordReset.controller.js:7-22`; `controllers/otp.controller.js:7-23`; `controllers/auth.controller.js:111-122`
-- Category: Observable timing discrepancy | CWE-208 | OWASP A07:2025 Identification and Authentication Failures; OWASP API2:2023 Broken Authentication
-- Confidence: High (95%)
-- Problem: The HTTP status and body are generic, but the work is not materially uniform. An unknown or ineligible address returns immediately after the user query. A known eligible address performs extra token/code database work and a synchronous SMTP request before responding.
-- Evidence: `requestPasswordReset`, `requestOtpCode`, and `resendEmailVerification` each take an early return for an absent/ineligible user. The known-account branch creates or updates a credential and awaits an external mail send. The generic controller response does not hide this network-scale timing difference.
-- Impact: A remote attacker can distinguish registered/eligible addresses by sampling latency, building a list for phishing, credential stuffing, or targeted lockout. Per-IP request throttles increase the cost but do not remove a distributed timing oracle.
-- Fix: Keep the public request path materially uniform. After layered abuse limits, enqueue the same small normalized work item for both cases and return without waiting for SMTP; let a worker silently discard an absent/ineligible target. Do not use a fixed sleep as the primary control. Add timing-distribution tests for known and unknown targets.
-
-### [MEDIUM] Five bad passwords let an unauthenticated attacker lock out a known account
-
-- Location: `services/login.service.js:13-45`; `services/loginThrottle.service.js:4-6,31-44,47-121,124-162`; `routes/auth.route.js:23-27,86-91`; `tests/e2e/throttling.e2e.js:174-222`
-- Category: Improper restriction of excessive authentication attempts | CWE-307 | OWASP A07:2025 Identification and Authentication Failures; OWASP API2:2023 Broken Authentication
-- Confidence: High (98%)
-- Problem: Login checks the email-scoped block before it looks up the user or verifies the password. Five failed attempts create a 15-minute block for that normalized email, and the route's ten-per-minute source limit permits one client to trigger it. A correct password is rejected while the block exists.
-- Evidence: `authenticateUser` returns `login_throttled` at lines 13-18 before `bcrypt.compare`. `recordFailedLogin` blocks at five failures. The end-to-end test explicitly submits five wrong passwords, then proves that the correct password receives `429`.
-- Impact: Anyone who knows a victim's email can deny login for repeated 15-minute windows without knowing a credential. The attack can be renewed and can target many accounts from distributed sources.
-- Fix: Do the constant-cost credential verification before applying an account block. A correct password should clear the failed-attempt state and proceed. Apply the strict limit to failed credentials using layered account, trusted-device/network, and edge signals so an unknown client cannot consume the owner's ability to authenticate. Alert on targeted lockout patterns.
-
-### [MEDIUM] Payment idempotency is neither request-bound nor claimed before the provider call
-
-- Location: `services/payment.service.js:122-200`; `models/payment.model.js:88-100`; `services/paymentProviders/stripe.provider.js:163-193`; `services/paymentProviders/zarinpal.provider.js:275-323`; `README.md:255-274`; `tests/services/payment.test.js:223-280`
+- Location: `services/payment.service.js:226-283,336-556`; `models/paymentCreation.model.js:42-63,73-75`; `tests/services/payment.test.js:400-450,680-756`
 - Category: Race condition and workflow enforcement | CWE-362, CWE-841 | OWASP A06:2025 Insecure Design; OWASP API6:2023 Unrestricted Access to Sensitive Business Flows
 - Confidence: High (95%)
-- Problem: The service reads for an existing `{user, idempotencyKey}`, calls the external provider, and only then inserts the uniquely indexed payment. It also returns an existing payment for the same key without checking that amount, currency, provider, and description match the first request. Stripe receives the raw client key in an account-wide provider namespace, while ZarinPal receives no idempotency key at all.
-- Evidence: Two concurrent requests can both miss the database lookup and both reach `paymentProvider.createPayment` before one loses the MongoDB insert. The duplicate handler reloads the winning local row only after both provider calls. A replay with different parameters is accepted at lines 136-147 without a request fingerprint. For Stripe, two different local users using the same raw key can collide at the provider even though the database index is user-scoped. For ZarinPal, a losing request can leave a second provider authority with no local record. The current race test confirms database recovery but does not prove a single provider effect.
-- Impact: Retries or concurrent requests can create orphan provider operations, return an earlier checkout for different payment parameters, or cause cross-user denial through Stripe's shared key namespace. The present flow creates payment intents rather than capturing funds, which limits the current impact but breaks the guarantee expected of a payment boundary.
-- Fix: Atomically claim `{userId, idempotencyKey}` before any external call and store a canonical fingerprint covering route, provider, amount, currency, and description. Return `409` when the same key carries a different fingerprint. Persist processing/succeeded/failed state and the replayable outcome. Derive Stripe's provider key from the user-scoped key (for example, a server HMAC over user, route, and client key). For a provider without native idempotency, use the durable claim plus reconciliation so only the owner of the claim calls the provider.
+- Problem: Payment creation now claims `{user, idempotencyKey}` before contacting the provider and correctly blocks concurrent duplicate calls. However, a claim can remain `processing` indefinitely when the provider accepts the request and the process stops before `Payment.create`, when the provider response is ambiguous, or when local persistence fails after the external effect. The replay path returns `processing` whenever no local payment exists and never leases, expires, retries, queries, or reconciles that claim.
+- Evidence: `createPayment` persists a processing claim at lines 435-443, calls the external provider at lines 474-482, and stores the local payment only at lines 493-549. `resolveCreationClaim` returns `processing` at lines 258-265 when no payment is present. The model has a status/update-time index but no recovery ownership or reconciliation state. The regression test at lines 400-425 explicitly proves that such a claim remains in progress and that the provider is not called again. Stripe receives a stable server-derived provider idempotency key, but no code uses it to retrieve or reconcile a prior outcome; ZarinPal has no equivalent native idempotency mechanism in this integration.
+- Impact: An accepted provider operation can be orphaned from local state, and the client can be permanently unable to complete or safely reuse that logical request. This can strand checkout authorities, create support-only recovery, and leave application and provider records inconsistent. The current flow creates payment intents rather than capturing funds, which limits the present financial impact.
+- Fix: Add an explicit reconciliation state machine for stale processing claims. Record enough non-secret provider correlation data to query a prior outcome, lease recovery work atomically, and reconcile to `succeeded`, `failed`, or a visible manual-review state. Never blindly repeat a non-idempotent provider call. Add fault-injection tests for interruption after provider acceptance and before local persistence, plus ambiguous transport failure tests for each provider.
 
 ### [MEDIUM] Single-factor password policy accepts easily guessed passwords
 
 - Location: `validators/password.validator.js:1-55`; `validators/register.validator.js:41-63`; `validators/passwordResetConfirm.validator.js:57-83`; `validators/passwordChange.validator.js:36-61`
 - Category: Weak password requirements | CWE-521 | OWASP A07:2025 Identification and Authentication Failures
 - Confidence: High (98%)
-- Problem: Password-only login is supported, but the shared validator accepts eight-character passwords and checks only six hard-coded common values. The same weak policy is applied during registration, reset, and change.
-- Evidence: `validatePassword` rejects only values shorter than eight, entirely numeric values, six listed strings, or bcrypt inputs over 72 bytes. A candidate such as an eight-character dictionary mutation not in that six-entry set passes every password-setting path.
-- Impact: Guessable credentials have a much higher chance of succeeding during password spraying or credential reuse, and are substantially easier to recover from a stolen password-hash database. Online throttling does not protect an offline copy of the hashes.
-- Fix: For password-only authentication, raise the minimum to 15 characters while retaining a usable bcrypt-safe maximum. Check the complete candidate against a large, refreshed compromised/common-password corpus, either through a reviewed local data file or a privacy-preserving range API with an explicit outage policy. Keep the policy centralized in this existing validator and avoid arbitrary character-class composition rules.
+- Problem: Password-only login is supported, but the shared validator accepts eight-character passwords and checks only six hard-coded common values. Registration, reset, and change all inherit this policy.
+- Evidence: `validatePassword` rejects only values shorter than eight, entirely numeric values, six listed strings, or bcrypt inputs over 72 UTF-8 bytes. An eight-character dictionary mutation that is not one of those six values passes every password-setting path.
+- Impact: Guessable credentials are more likely to succeed during password spraying or credential reuse and are substantially easier to recover from a stolen password-hash database. Online throttling does not protect an offline copy of the hashes.
+- Fix: For password-only authentication, raise the minimum to 15 characters while retaining a usable bcrypt-safe maximum. Check the complete candidate against a large, refreshed compromised-password corpus through a reviewed local data file or a privacy-preserving range API with an explicit outage policy. Keep the policy centralized and avoid arbitrary character-class composition rules.
 
 ### [MEDIUM] CI executes actions and a service image through mutable tags
 
 - Location: `.github/workflows/without-packages-tests.yml:30-45,59-78`
 - Category: Software supply-chain integrity | CWE-494, CWE-829 | OWASP A03:2025 Software Supply Chain Failures
 - Confidence: High (100%)
-- Problem: Both jobs execute `actions/checkout@v7` and `actions/setup-node@v7`, and the end-to-end job starts `mongo:8.0`. These names are mutable references; a publisher account or registry compromise can move them to different code without a repository diff.
-- Evidence: The workflow pins neither action to a full commit SHA nor the MongoDB image to a digest. The actions execute directly in the runner context where the checked-out source and GitHub token are available. The dependency lockfile and `npm ci` do not verify workflow actions or container-image tags.
-- Impact: A substituted upstream artifact can execute during pull-request or push CI, read repository contents and available runner credentials, alter test results, or poison produced evidence.
-- Fix: Pin every action to a reviewed full commit SHA and retain the release tag in a comment for maintainability. Pin the MongoDB image by digest. Use an update process that proposes and reviews SHA/digest changes rather than floating automatically.
+- Problem: Both jobs execute `actions/checkout@v7` and `actions/setup-node@v7`, and the MongoDB job starts `mongo:8.0`. These are mutable references that can resolve to different code without a repository diff.
+- Evidence: The workflow pins neither action to a reviewed full commit SHA nor the MongoDB image to a digest. The dependency lockfile and `npm ci` do not verify workflow actions or container-image tags.
+- Impact: A substituted upstream artifact can execute in the runner, read repository contents and available credentials, alter test results, or poison produced evidence.
+- Fix: Pin every action to a reviewed full commit SHA and retain the release tag in a comment. Pin the MongoDB image by digest. Update these references through reviewed dependency-update changes.
 
 ### [LOW] Security-sensitive account events have no durable audit trail
 
-- Location: `services/login.service.js:13-59`; `services/passwordChange.service.js:107-174`; `services/emailChange.service.js:362-417`; `services/accountDeletion.service.js:49-100`; `middlewares/errorHandler.middleware.js:26-35`; `middlewares/requestId.middleware.js:1-10`
+- Location: `services/login.service.js:12-53`; `services/passwordReset.service.js:285-363`; `services/passwordChange.service.js:107-174`; `services/emailChange.service.js:362-417`; `services/accountDeletion.service.js:49-100`; `middlewares/errorHandler.middleware.js:26-35`; `middlewares/requestId.middleware.js:1-10`
 - Category: Insufficient logging | CWE-778 | OWASP A09:2025 Security Logging and Alerting Failures
-- Confidence: High (90%)
-- Problem: The API generates a request ID and logs unexpected errors, but it does not record structured authentication successes/failures/lockouts, password resets or changes, email changes, account deactivation, or authorization denials. Notification-failure messages contain no actor, subject identifier, source, or request ID.
-- Evidence: The security-sensitive services complete their state transitions without writing an audit event. The centralized handler logs only unexpected exceptions. Repository-wide logging searches find server startup, mail previews, and error messages, but no security-event sink or monitored event model.
-- Impact: Credential stuffing, targeted lockouts, account takeover, and malicious security-setting changes may be impossible to detect promptly or reconstruct reliably after an incident.
-- Fix: Add a centralized structured security-event path that records event type, outcome, stable user identifier when known, server-issued request ID, trusted source signal, and time without passwords, tokens, mail bodies, or unnecessary PII. Cover login results and lockouts, password/email changes, recovery completion, account deactivation, and authorization denial; forward the records to a monitored append-oriented sink and alert on targeted and distributed abuse patterns.
+- Confidence: High (95%)
+- Problem: The API creates request IDs and records unexpected errors, but it has no centralized durable event path for authentication successes/failures/lockouts, password resets or changes, email changes, account deactivation, or authorization denials. Repository-wide searches find startup, development mail-preview, worker-failure, and exception logs, but no security-event model or monitored sink.
+- Evidence: The security-sensitive services complete their state transitions without writing an actor-attributed audit event. The centralized error handler records unexpected exceptions only. The account-email worker's structured failure metadata is operational logging, not a durable security history.
+- Impact: Credential stuffing, targeted lockouts, account takeover, and malicious security-setting changes may be difficult to detect promptly or reconstruct reliably after an incident.
+- Fix: Add a centralized structured security-event path that records event type, outcome, stable user identifier when known, server-issued request ID, trusted source signal, and time without passwords, tokens, mail bodies, or unnecessary PII. Cover login results and lockouts, password/email changes, recovery completion, account deactivation, and authorization denial. Send records to a monitored append-oriented sink and alert on targeted, distributed, decisive, and missing-source signals.
+
+### Remediation verification
+
+| Original finding | Status | Verification evidence |
+| --- | --- | --- |
+| Authentication and recovery credentials exposed through mail-preview logs | Closed | Production startup is rejected while Ethereal is configured (`config/environment.js:67-85`); the transport also refuses production and preview URLs are created only in development (`services/email.service.js:5-14,41-55`); the worker logs preview URLs only in development and logs generic failures without credentials (`workers/accountEmail.worker.js:44-64`). Regression coverage is in `tests/services/email.test.js:67-150`, `tests/workers/account-email.test.js:78-157`, and `tests/app/startup.test.js:125-135`. |
+| Recovery and verification timing reveals account existence | Closed | Password-reset, OTP, and verification-resend request paths now enqueue the same normalized work item and return `accepted` without a user lookup or SMTP wait (`services/passwordReset.service.js:81-88`, `services/otp.service.js:81-85`, `services/emailVerification.service.js:141-148`). Eligibility checks and credential issuance happen in the worker path. `tests/services/account-email-requests.test.js:14-61` verifies identical public work for known and unknown addresses; MongoDB end-to-end tests verify silent discard and delivery behavior. |
+| Five bad passwords lock out a known account | Closed | Credential comparison now occurs before failed-attempt throttling, a correct password clears the throttle record, and an unknown account still pays a bcrypt comparison (`services/login.service.js:12-48`). `tests/services/login.test.js:24-127` verifies ordering and the dummy hash; `tests/e2e/throttling.e2e.js:174-241` proves that a correct password succeeds after the threshold and resets the counter. |
+| Payment idempotency is neither request-bound nor claimed before the provider call | Partially remediated; narrowed finding remains above | The unique durable claim, canonical request fingerprint, server-HMAC provider key, conflict handling, and concurrent single-effect behavior are present (`models/paymentCreation.model.js:8-75`, `services/payment.service.js:86-135,336-555`) and tested (`tests/services/payment.test.js:250-316,351-450,680-756`). Recovery of a provider outcome that is not locally persisted remains absent. |
 
 ## 3. Worth checking
 
 These items depend on deployment or external components not present in the repository and are not counted as confirmed findings.
 
-1. Reverse proxy and client IP: `requestThrottle.middleware.js:28-35` keys limits on `req.ip`, while `app.js` does not configure Express `trust proxy`. Verify whether a proxy or load balancer fronts the app, exactly which hop overwrites forwarded-address headers, and whether distinct clients reach the service with distinct trusted addresses. A shared proxy address would let one client exhaust limits for everyone; an overly broad trust setting would make addresses spoofable.
-2. Canonical origins and TLS: `config/environment.js:46-63,96-115` accepts both HTTP and HTTPS for token-bearing frontend links and the ZarinPal callback. Verify that every non-local deployment rejects HTTP configuration and that TLS is enforced at the edge. `notification.controller.js:27-52` also builds pagination links from the request `Host`; verify the edge overwrites `Host` and clients never forward bearer credentials to a host taken from response pagination, or return relative/configured-origin links instead.
-3. Deactivation versus erasure: the `/delete` route is deliberately documented as account deactivation (`README.md:179,340,407`), and `accountDeletion.service.js:49-87` retains email, profile data, password hash, provider subject, and related records. Confirm the product's retention and erasure obligations. If callers are promised deletion rather than deactivation, a separate authenticated erasure workflow and per-store completion record are required.
-4. Device-token transfer: `deviceToken.service.js:36-57` allows an authenticated caller that possesses an existing globally unique device token to rebind it to another user, matching `README.md:249-253`. Verify with the push provider and client design that token possession is intended to authorize ownership transfer and that notifications never contain sensitive data. No push-delivery implementation was present to establish the downstream impact.
+1. Reverse proxy and client IP: `middlewares/requestThrottle.middleware.js:28-35` keys limits on `req.ip`, while `app.js` does not configure Express `trust proxy`. Verify the exact proxy/load-balancer topology, which hop overwrites forwarded-address headers, and whether distinct clients reach the service with distinct trusted addresses. A shared proxy address can let one client exhaust limits for everyone; an overly broad trust setting makes addresses spoofable.
+2. Canonical origins and TLS: `config/environment.js:48-65,119-138` accepts HTTP and HTTPS for token-bearing frontend links and the ZarinPal callback. Verify that non-local deployment rejects HTTP and that TLS is enforced at the edge. `controllers/notification.controller.js:27-52` builds pagination links from the request host; verify the edge overwrites `Host`, or return relative/configured-origin links.
+3. Deactivation versus erasure: the `/delete` route is documented as account deactivation, and `services/accountDeletion.service.js:49-87` retains account and related data. Confirm the product's retention and erasure obligations. If callers are promised deletion, add a distinct authenticated erasure workflow with per-store completion records.
+4. Device-token transfer: `services/deviceToken.service.js:36-57` permits an authenticated caller that possesses an existing globally unique device token to rebind it to another user. Confirm with the push provider and client design that token possession is intended to authorize ownership transfer and that notifications never carry sensitive data. No push-delivery implementation is present to establish the downstream impact.
 
-## 4. Coverage and limitations
+## 4. Not reviewed and limitations
 
-Fully reviewed application areas:
+Fully reviewed for this follow-up:
 
-- Express startup and global middleware;
-- all route, controller, middleware, model, service, utility, validator, config, and error modules under `Without-Packages`;
-- authentication, token rotation, OTP, verification, password recovery/change, email change, Google login, profile, account deactivation, notification, device-token, and payment boundaries;
-- relevant unit/integration/end-to-end tests for the reported paths;
-- `README.md`, `.env.example`, `.gitignore`, `package.json`, lockfile metadata, and the root CI workflow.
+- every original finding and its current source path;
+- the account-email queue model, service, worker, startup/shutdown wiring, and regression tests added by remediation;
+- login-throttle and payment-creation remediation code and tests;
+- the shared password validator, security-relevant logging paths, dependency metadata, and root CI workflow;
+- all automated tests through the complete local unit, integration, and MongoDB-backed end-to-end suites.
 
-No queue workers, scheduled jobs, CLI/management commands, admin interface, webhook/callback receiver, GraphQL, gRPC, WebSocket, file-upload, or export surface exists in the reviewed repository. If any is supplied by another repository or platform, it was not covered.
+No scheduled job, CLI/management command, admin interface, webhook/callback receiver, GraphQL, gRPC, WebSocket, file-upload, or export surface exists in the reviewed repository. The account-email worker is present and was reviewed. Architecture ground-truth and design-record documents were not present.
 
-The review did not inspect real environment values, secrets, credential stores, provider dashboards, production databases, reverse-proxy configuration, TLS termination, log aggregation/alerting, backups, cloud IAM, or network policy. It did not conduct live penetration, load, race, or provider tests.
+The review did not inspect real environment values, secrets, credential stores, provider dashboards, production databases, reverse-proxy configuration, TLS termination, log aggregation/alerting, backups, cloud IAM, or network policy. It did not conduct live penetration, load, external-provider, or process-crash fault-injection testing.
 
-The installed direct dependency versions were identified locally as bcrypt 6.0.0, dotenv 17.4.2, Express 5.2.1, google-auth-library 11.0.2, Mongoose 9.7.2, and Nodemailer 9.1.1. `npm audit --omit=dev --json` was attempted both inside and outside the sandbox, but the official npm advisory endpoint reset the connection both times. Current known-advisory status therefore remains unverified in this report; the repository's CI does run a failing production audit gate before tests.
+Installed direct dependencies were bcrypt 6.0.0, dotenv 17.4.2, Express 5.2.1, google-auth-library 11.0.2, Mongoose 9.7.2, and Nodemailer 9.1.1. The production dependency audit completed successfully with zero known vulnerabilities at review time; this is time-sensitive and does not replace the CI audit gate.
