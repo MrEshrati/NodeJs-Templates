@@ -2,6 +2,17 @@ const nodemailer = require("nodemailer");
 
 let transporterPromise;
 
+const getRuntimeEnvironment = () =>
+  process.env.NODE_ENV?.trim().toLowerCase();
+
+const getPreviewUrl = (info) => {
+  if (getRuntimeEnvironment() !== "development") {
+    return null;
+  }
+
+  return nodemailer.getTestMessageUrl(info) || null;
+};
+
 async function createEtherealTransporter() {
   const testAccount = await nodemailer.createTestAccount();
 
@@ -25,6 +36,10 @@ async function createEtherealTransporter() {
 }
 
 async function getTestTransporter() {
+  if (getRuntimeEnvironment() === "production") {
+    throw new Error("Ethereal email delivery is disabled in production.");
+  }
+
   if (!transporterPromise) {
     transporterPromise = createEtherealTransporter();
   }
@@ -72,7 +87,7 @@ async function sendVerificationEmail(email, token) {
 
   return {
     messageId: info.messageId,
-    previewUrl: nodemailer.getTestMessageUrl(info),
+    previewUrl: getPreviewUrl(info),
   };
 }
 
@@ -111,7 +126,7 @@ async function sendAccountExistsEmail(email) {
 
   return {
     messageId: info.messageId,
-    previewUrl: nodemailer.getTestMessageUrl(info),
+    previewUrl: getPreviewUrl(info),
   };
 }
 
@@ -144,7 +159,7 @@ async function sendOtpCodeEmail(email, code) {
 
   return {
     messageId: info.messageId,
-    previewUrl: nodemailer.getTestMessageUrl(info),
+    previewUrl: getPreviewUrl(info),
   };
 }
 
@@ -180,7 +195,7 @@ const sendPasswordResetEmail = async (email, userId, token) => {
 
   return {
     messageId: info.messageId,
-    previewUrl: nodemailer.getTestMessageUrl(info),
+    previewUrl: getPreviewUrl(info),
   };
 };
 
@@ -203,7 +218,7 @@ const sendPasswordChangedEmail = async (email) => {
 
   return {
     messageId: info.messageId,
-    previewUrl: nodemailer.getTestMessageUrl(info),
+    previewUrl: getPreviewUrl(info),
   };
 };
 
@@ -239,7 +254,7 @@ const sendEmailChangeConfirmationEmail = async (newEmail, token) => {
 
   return {
     messageId: info.messageId,
-    previewUrl: nodemailer.getTestMessageUrl(info),
+    previewUrl: getPreviewUrl(info),
   };
 };
 
@@ -264,7 +279,7 @@ const sendEmailChangedEmail = async (oldEmail) => {
 
   return {
     messageId: info.messageId,
-    previewUrl: nodemailer.getTestMessageUrl(info),
+    previewUrl: getPreviewUrl(info),
   };
 };
 

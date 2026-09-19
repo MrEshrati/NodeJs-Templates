@@ -27,6 +27,7 @@ const documentedEndpoints = [
 
 const documentedEnvironmentKeys = [
   "PORT",
+  "NODE_ENV",
   "DB_URL",
   "TEST_DB_URL",
   "FRONTEND_URL",

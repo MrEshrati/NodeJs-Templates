@@ -7,6 +7,7 @@ const {
 
 const validEnvironment = () => ({
   PORT: "3000",
+  NODE_ENV: "development",
   DB_URL: "mongodb://127.0.0.1:27017/account-api",
   FRONTEND_URL: "http://localhost:5173",
   GOOGLE_CLIENT_ID: "google-client-id",
@@ -20,6 +21,7 @@ const validEnvironment = () => ({
 
 const REQUIRED_ENVIRONMENT_NAMES = [
   "PORT",
+  "NODE_ENV",
   "DB_URL",
   "FRONTEND_URL",
   "GOOGLE_CLIENT_ID",
@@ -39,12 +41,48 @@ test("environment validation returns normalized server configuration", () => {
   assert.deepEqual(validateEnvironment(environment), {
     port: 3000,
     databaseUrl: "mongodb://127.0.0.1:27017/account-api",
+    runtimeEnvironment: "development",
     payment: {
       provider: "stripe",
       fakeMode: true,
       credentials: null,
     },
   });
+});
+
+test("environment validation accepts development and test runtimes", () => {
+  for (const [value, expected] of [
+    [" Development ", "development"],
+    [" TEST ", "test"],
+  ]) {
+    const environment = validEnvironment();
+    environment.NODE_ENV = value;
+
+    assert.equal(
+      validateEnvironment(environment).runtimeEnvironment,
+      expected,
+    );
+  }
+});
+
+test("environment validation rejects unsupported runtimes", () => {
+  const environment = validEnvironment();
+  environment.NODE_ENV = "staging";
+
+  assert.throws(
+    () => validateEnvironment(environment),
+    /NODE_ENV must be/,
+  );
+});
+
+test("environment validation refuses Ethereal email in production", () => {
+  const environment = validEnvironment();
+  environment.NODE_ENV = "production";
+
+  assert.throws(
+    () => validateEnvironment(environment),
+    /email delivery uses Ethereal/,
+  );
 });
 
 test("environment validation requires an object", () => {

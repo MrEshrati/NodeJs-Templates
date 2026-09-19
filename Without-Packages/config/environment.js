@@ -6,6 +6,7 @@ const SECRET_NAMES = [
   "REQUEST_THROTTLE_SECRET",
 ];
 const PAYMENT_PROVIDERS = new Set(["stripe", "zarinpal"]);
+const RUNTIME_ENVIRONMENTS = new Set(["development", "test", "production"]);
 
 const assertEnvironmentObject = (environment) => {
   if (
@@ -60,6 +61,27 @@ const validateFrontendUrl = (environment) => {
   ) {
     throw new Error("FRONTEND_URL must be a valid HTTP or HTTPS URL.");
   }
+};
+
+const validateRuntimeEnvironment = (environment) => {
+  const runtimeEnvironment = getRequiredString(
+    environment,
+    "NODE_ENV",
+  ).toLowerCase();
+
+  if (!RUNTIME_ENVIRONMENTS.has(runtimeEnvironment)) {
+    throw new Error(
+      'NODE_ENV must be "development", "test", or "production".',
+    );
+  }
+
+  if (runtimeEnvironment === "production") {
+    throw new Error(
+      "NODE_ENV=production is not supported while email delivery uses Ethereal.",
+    );
+  }
+
+  return runtimeEnvironment;
 };
 
 const validateSecret = (environment, name) => {
@@ -157,6 +179,7 @@ const validateEnvironment = (environment = process.env) => {
 
   const port = validatePort(environment);
   const databaseUrl = getRequiredString(environment, "DB_URL");
+  const runtimeEnvironment = validateRuntimeEnvironment(environment);
 
   validateFrontendUrl(environment);
   getRequiredString(environment, "GOOGLE_CLIENT_ID");
@@ -170,6 +193,7 @@ const validateEnvironment = (environment = process.env) => {
   return {
     port,
     databaseUrl,
+    runtimeEnvironment,
     payment,
   };
 };

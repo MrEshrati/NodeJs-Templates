@@ -6,6 +6,7 @@ const { fromProject, PROJECT_ROOT } = require("../helpers/module");
 
 const DOCUMENTED_KEYS = [
   "PORT",
+  "NODE_ENV",
   "DB_URL",
   "TEST_DB_URL",
   "FRONTEND_URL",
@@ -69,6 +70,7 @@ test("environment example contains only non-secret development values", () => {
   );
 
   assert.equal(values.PORT, "3000");
+  assert.equal(values.NODE_ENV, "development");
   assert.match(values.DB_URL, /^mongodb:\/\/127\.0\.0\.1:/);
   assert.match(values.DB_URL, /replicaSet=rs0/);
   assert.match(values.TEST_DB_URL, /^mongodb:\/\/127\.0\.0\.1:/);

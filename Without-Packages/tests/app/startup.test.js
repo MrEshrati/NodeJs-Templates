@@ -11,6 +11,7 @@ const {
 
 const validEnvironment = {
   PORT: "4321",
+  NODE_ENV: "test",
   DB_URL: "mongodb://127.0.0.1:27017/test-database",
   FRONTEND_URL: "http://localhost:5173",
   GOOGLE_CLIENT_ID: "google-client-id",
@@ -106,6 +107,19 @@ test("startServer rejects missing configuration before connecting", async (t) =>
     { ...validEnvironment, JWT_SECRET: "short" },
     async () => {
       await assert.rejects(startServer(), /JWT_SECRET must contain at least 32 bytes/);
+    },
+  );
+
+  assert.equal(connect.mock.callCount(), 0);
+});
+
+test("startServer refuses Ethereal email in production", async (t) => {
+  const connect = t.mock.method(mongoose, "connect", async () => {});
+
+  await withEnvironment(
+    { ...validEnvironment, NODE_ENV: "production" },
+    async () => {
+      await assert.rejects(startServer(), /email delivery uses Ethereal/);
     },
   );
 

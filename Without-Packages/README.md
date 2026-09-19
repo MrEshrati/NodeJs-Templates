@@ -80,6 +80,7 @@ request or inactive socket, and 5 seconds for an idle keep-alive connection.
 | Variable | Purpose |
 | --- | --- |
 | `PORT` | HTTP port from 1 through 65535. |
+| `NODE_ENV` | Runtime mode: `development`, `test`, or `production`. Production startup is rejected while email uses Ethereal. |
 | `DB_URL` | MongoDB connection URL. The example uses the `rs0` replica set. |
 | `TEST_DB_URL` | Dedicated MongoDB URL for database-backed tests; its database name must end with `_test`. |
 | `FRONTEND_URL` | Frontend base URL used in email links and as the allowed browser CORS origin. |
@@ -355,9 +356,10 @@ stored as keyed HMACs rather than raw email or client values.
 
 ## Email links in development
 
-Nodemailer creates an Ethereal test account automatically. Messages are not
-delivered to real inboxes. When Ethereal returns a preview URL, the controller
-prints it to the server terminal for manual testing.
+When `NODE_ENV=development`, Nodemailer creates an Ethereal test account
+automatically. Messages are not delivered to real inboxes. When Ethereal
+returns a preview URL, the controller prints it to the server terminal for
+manual testing. Preview URLs are suppressed in test mode.
 
 The frontend must own the pages referenced by email links:
 
@@ -368,8 +370,9 @@ The frontend must own the pages referenced by email links:
 Opening one of those frontend pages is not the API confirmation itself. The
 frontend extracts the value and submits it to the corresponding POST endpoint.
 
-Replace Ethereal with a production mail provider before deploying this project
-for real users.
+Production startup is rejected while this project uses Ethereal. Replace it
+with a production mail provider and update the startup validation before
+deploying this project for real users.
 
 ## Errors and privacy behavior
 
