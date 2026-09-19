@@ -327,7 +327,7 @@ between the two provider tests is required.
 | OTP resend | 1-minute cooldown |
 | Password-reset link | 1 hour; resend cooldown is 3 minutes |
 | Email-change link | 1 hour; resend cooldown is 3 minutes |
-| Password login failures | 5 failures within 15 minutes trigger a 15-minute block |
+| Password login failures | 5 failures within 15 minutes block further failed credentials for 15 minutes; a correct password clears the failure state |
 
 Refresh JWT IDs are stored only as SHA-256 hashes. OTP codes are protected with
 HMAC-SHA256 and bound to the user ID. Passwords are hashed with bcrypt using a

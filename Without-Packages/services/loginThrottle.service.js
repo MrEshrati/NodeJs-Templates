@@ -28,22 +28,6 @@ const createEmailHmac = (email) => {
     .digest("hex");
 };
 
-const getLoginThrottleStatus = async (email) => {
-  const emailHmac = createEmailHmac(email);
-
-  const throttle = await LoginThrottle.findOne({
-    emailHmac,
-    $expr: { $gt: ["$blockedUntil", "$$NOW"] },
-  })
-    .select("blockedUntil -_id")
-    .lean();
-
-  return {
-    blocked: Boolean(throttle),
-    blockedUntil: throttle?.blockedUntil ?? null,
-  };
-};
-
 const createFailedLoginUpdate = () => {
   const isBlocked = {
     $gt: [{ $ifNull: ["$blockedUntil", null] }, "$$NOW"],
@@ -162,7 +146,6 @@ const clearLoginFailures = async (email) => {
 };
 
 module.exports = {
-  getLoginThrottleStatus,
   recordFailedLogin,
   clearLoginFailures,
 };

@@ -211,15 +211,31 @@ test(
       },
     );
 
-    assert.equal(correctPasswordWhileBlocked.response.status, 429);
-    assert.equal(correctPasswordWhileBlocked.payload.code, "throttled");
+    assert.equal(correctPasswordWhileBlocked.response.status, 200);
+    assert.equal(typeof correctPasswordWhileBlocked.payload.access, "string");
+    assert.equal(typeof correctPasswordWhileBlocked.payload.refresh, "string");
+    assert.equal(await LoginThrottle.countDocuments(), 0);
+
+    const failedLoginAfterSuccess = await requestJson(
+      baseUrl,
+      "/auth/login",
+      {
+        method: "POST",
+        body: {
+          email: TEST_EMAIL,
+          password: "incorrect-password",
+        },
+      },
+    );
+
+    assert.equal(failedLoginAfterSuccess.response.status, 400);
+    assert.equal(failedLoginAfterSuccess.payload.code, "validation_error");
 
     const loginThrottle = await LoginThrottle.findOne().lean();
 
     assert.ok(loginThrottle);
-    assert.equal(loginThrottle.failedAttempts, 5);
-    assert.ok(loginThrottle.blockedUntil instanceof Date);
-    assert.ok(loginThrottle.blockedUntil.getTime() > Date.now());
+    assert.equal(loginThrottle.failedAttempts, 1);
+    assert.equal(loginThrottle.blockedUntil, null);
     assert.match(loginThrottle.emailHmac, /^[a-f0-9]{64}$/);
     assert.notEqual(loginThrottle.emailHmac, TEST_EMAIL);
     assert.equal(Object.hasOwn(loginThrottle, "email"), false);

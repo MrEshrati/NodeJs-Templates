@@ -2,7 +2,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { consumeRequestThrottle } = require("../../services/requestThrottle.service");
 const {
-  getLoginThrottleStatus,
   recordFailedLogin,
   clearLoginFailures,
 } = require("../../services/loginThrottle.service");
@@ -22,7 +21,6 @@ test("request-throttle service rejects invalid limits before database access", a
 });
 
 test("login-throttle entry points reject an empty email before database access", async () => {
-  await assert.rejects(getLoginThrottleStatus(""), /email/);
   await assert.rejects(recordFailedLogin(null), /email/);
   await assert.rejects(clearLoginFailures("   "), /email/);
 });
