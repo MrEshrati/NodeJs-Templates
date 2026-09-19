@@ -2,6 +2,10 @@ const tokenGenerator = require("../utils/token.utils");
 const emailVerification = require("../models/emailVerificationToken.model");
 const User = require("../models/user.model");
 const { sendVerificationEmail } = require("./email.service");
+const {
+  ACCOUNT_EMAIL_JOB_TYPES,
+  enqueueAccountEmailJob,
+} = require("./accountEmailJob.service");
 
 const VERIFICATION_TOKEN_TTL_MS = 60 * 60 * 1000;
 const VERIFICATION_RESEND_COOLDOWN_MS = 3 * 60 * 1000;
@@ -102,6 +106,7 @@ const issueEmailVerificationTokenAfterCooldown = async (userId) => {
   if (updatedToken) {
     return {
       token,
+      tokenHash: hashedToken,
       expiresAt,
     };
   }
@@ -115,6 +120,7 @@ const issueEmailVerificationTokenAfterCooldown = async (userId) => {
 
     return {
       token,
+      tokenHash: hashedToken,
       expiresAt,
     };
   } catch (error) {
@@ -133,11 +139,20 @@ const issueEmailVerificationTokenAfterCooldown = async (userId) => {
 };
 
 const resendEmailVerification = async (email) => {
+  await enqueueAccountEmailJob(
+    ACCOUNT_EMAIL_JOB_TYPES.EMAIL_VERIFICATION,
+    email,
+  );
+
+  return { status: "accepted" };
+};
+
+const deliverEmailVerification = async (email) => {
   const user = await User.findOne({ email, isActive: true });
 
   if (!user || user.emailVerified) {
     return {
-      sent: false,
+      status: "discarded",
       previewUrl: null,
     };
   }
@@ -146,20 +161,29 @@ const resendEmailVerification = async (email) => {
 
   if (!tokenResult) {
     return {
-      sent: false,
+      status: "discarded",
       previewUrl: null,
     };
   }
 
-  const { messageId, previewUrl } = await sendVerificationEmail(
-    user.email,
-    tokenResult.token,
-  );
+  let emailResult;
+
+  try {
+    emailResult = await sendVerificationEmail(user.email, tokenResult.token);
+  } catch (error) {
+    await emailVerification.deleteOne({
+      user: user._id,
+      tokenHash: tokenResult.tokenHash,
+      expiresAt: tokenResult.expiresAt,
+    });
+
+    throw error;
+  }
 
   return {
-    sent: true,
-    messageId,
-    previewUrl,
+    status: "sent",
+    messageId: emailResult.messageId,
+    previewUrl: emailResult.previewUrl,
   };
 };
 
@@ -167,4 +191,5 @@ module.exports = {
   issueEmailVerificationToken,
   confirmEmailAddress,
   resendEmailVerification,
+  deliverEmailVerification,
 };

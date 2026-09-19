@@ -17,6 +17,7 @@ const cors = require("./middlewares/cors.middleware");
 const notFound = require("./middlewares/notFound.middleware");
 const errorHandler = require("./middlewares/errorHandler.middleware");
 const { validateEnvironment } = require("./config/environment");
+const accountEmailWorker = require("./workers/accountEmail.worker");
 
 const app = express();
 const paymentRouterHost = express.Router();
@@ -94,6 +95,7 @@ const startServer = async () => {
   server.keepAliveTimeout = HTTP_TIMEOUTS.keepAlive;
   server.requestTimeout = HTTP_TIMEOUTS.request;
   server.timeout = HTTP_TIMEOUTS.socket;
+  server.accountEmailWorker = accountEmailWorker.startAccountEmailWorker();
 
   return server;
 };
@@ -116,29 +118,34 @@ const closeHttpServer = (server) =>
   });
 
 const performServerShutdown = async (server) => {
-  let httpError = null;
+  const shutdownErrors = [];
 
   try {
     await closeHttpServer(server);
   } catch (error) {
-    httpError = error;
+    shutdownErrors.push(error);
+  }
+
+  try {
+    if (server?.accountEmailWorker) {
+      await server.accountEmailWorker.stop();
+    }
+  } catch (workerError) {
+    shutdownErrors.push(workerError);
   }
 
   try {
     await mongoose.disconnect();
   } catch (databaseError) {
-    if (httpError) {
-      throw new AggregateError(
-        [httpError, databaseError],
-        "HTTP server and database shutdown failed.",
-      );
-    }
-
-    throw databaseError;
+    shutdownErrors.push(databaseError);
   }
 
-  if (httpError) {
-    throw httpError;
+  if (shutdownErrors.length === 1) {
+    throw shutdownErrors[0];
+  }
+
+  if (shutdownErrors.length > 1) {
+    throw new AggregateError(shutdownErrors, "Server shutdown failed.");
   }
 };
 

@@ -7,6 +7,10 @@ const { fromProject, loadWithMocks } = require("../helpers/module");
 const appPath = fromProject("app.js");
 const environmentPath = fromProject("config", "environment.js");
 const paymentRouterPath = fromProject("routes", "payment.route.js");
+const accountEmailWorkerPath = fromProject(
+  "workers",
+  "accountEmail.worker.js",
+);
 
 const DEFAULT_PAYMENT_CONFIG = Object.freeze({
   provider: "stripe",
@@ -72,6 +76,12 @@ const loadApplication = ({
       }
 
       return router;
+    },
+    [accountEmailWorkerPath]: {
+      startAccountEmailWorker() {
+        events.push("start email worker");
+        return { async stop() {} };
+      },
     },
   });
 
@@ -225,6 +235,7 @@ test("server startup configures payments before database and HTTP startup", asyn
       "mongodb://127.0.0.1:27017/payment-test",
     ],
     ["listen", 4321],
+    "start email worker",
   ]);
   assert.equal(fakeServer.headersTimeout, 10_000);
   assert.equal(fakeServer.keepAliveTimeout, 5_000);

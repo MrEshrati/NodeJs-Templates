@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
+const accountEmailWorker = require("../../workers/accountEmail.worker");
 
 const {
   app,
@@ -59,6 +60,7 @@ test("app module exports a configured Express application without starting it", 
 test("startServer connects to MongoDB before listening", async (t) => {
   const events = [];
   const fakeServer = { close() {} };
+  const fakeWorker = { async stop() {} };
 
   t.mock.method(mongoose, "connect", async (databaseUrl) => {
     events.push(["connect", databaseUrl]);
@@ -69,6 +71,10 @@ test("startServer connects to MongoDB before listening", async (t) => {
     return fakeServer;
   });
   t.mock.method(console, "log", () => {});
+  t.mock.method(accountEmailWorker, "startAccountEmailWorker", () => {
+    events.push(["start email worker"]);
+    return fakeWorker;
+  });
 
   await withEnvironment(validEnvironment, async () => {
     const server = await startServer();
@@ -79,10 +85,12 @@ test("startServer connects to MongoDB before listening", async (t) => {
   assert.equal(fakeServer.keepAliveTimeout, 5_000);
   assert.equal(fakeServer.requestTimeout, 30_000);
   assert.equal(fakeServer.timeout, 30_000);
+  assert.equal(fakeServer.accountEmailWorker, fakeWorker);
 
   assert.deepEqual(events, [
     ["connect", "mongodb://127.0.0.1:27017/test-database"],
     ["listen", 4321],
+    ["start email worker"],
   ]);
 });
 
@@ -133,6 +141,11 @@ test("stopServer closes HTTP before disconnecting MongoDB", async (t) => {
       events.push("close HTTP");
       callback();
     },
+    accountEmailWorker: {
+      async stop() {
+        events.push("stop email worker");
+      },
+    },
   };
 
   t.mock.method(mongoose, "disconnect", async () => {
@@ -141,7 +154,11 @@ test("stopServer closes HTTP before disconnecting MongoDB", async (t) => {
 
   await stopServer(server);
 
-  assert.deepEqual(events, ["close HTTP", "disconnect MongoDB"]);
+  assert.deepEqual(events, [
+    "close HTTP",
+    "stop email worker",
+    "disconnect MongoDB",
+  ]);
 });
 
 test("stopServer still disconnects MongoDB when HTTP closing fails", async (t) => {

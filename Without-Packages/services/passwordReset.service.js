@@ -8,6 +8,10 @@ const {
   sendPasswordResetEmail,
   sendPasswordChangedEmail,
 } = require("./email.service");
+const {
+  ACCOUNT_EMAIL_JOB_TYPES,
+  enqueueAccountEmailJob,
+} = require("./accountEmailJob.service");
 
 const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 const PASSWORD_RESET_SEND_COOLDOWN_MS = 3 * 60 * 1000;
@@ -75,6 +79,15 @@ const issuePasswordResetTokenAfterCooldown = async (userId) => {
 };
 
 const requestPasswordReset = async (email) => {
+  await enqueueAccountEmailJob(
+    ACCOUNT_EMAIL_JOB_TYPES.PASSWORD_RESET,
+    email,
+  );
+
+  return { status: "accepted" };
+};
+
+const deliverPasswordResetEmail = async (email) => {
   const user = await User.findOne({
     email,
     isActive: true,
@@ -84,8 +97,7 @@ const requestPasswordReset = async (email) => {
 
   if (!user) {
     return {
-      status: "accepted",
-      sent: false,
+      status: "discarded",
       previewUrl: null,
     };
   }
@@ -94,8 +106,7 @@ const requestPasswordReset = async (email) => {
 
   if (issuedToken === null) {
     return {
-      status: "accepted",
-      sent: false,
+      status: "discarded",
       previewUrl: null,
     };
   }
@@ -119,8 +130,7 @@ const requestPasswordReset = async (email) => {
   }
 
   return {
-    status: "accepted",
-    sent: true,
+    status: "sent",
     messageId: emailResult.messageId,
     previewUrl: emailResult.previewUrl,
   };
@@ -355,6 +365,7 @@ const confirmPasswordReset = async (uid, token, newPassword) => {
 module.exports = {
   issuePasswordResetTokenAfterCooldown,
   requestPasswordReset,
+  deliverPasswordResetEmail,
   inspectPasswordResetToken,
   consumePasswordResetToken,
   applyPasswordReset,

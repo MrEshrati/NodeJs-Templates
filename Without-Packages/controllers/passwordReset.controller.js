@@ -13,10 +13,6 @@ exports.requestPasswordReset = async (req, res, next) => {
       throw new Error("Unexpected password_reset service status.");
     }
 
-    if (result.previewUrl) {
-      console.log(`Reset-Password preview: ${result.previewUrl}`);
-    }
-
     res.status(200).json({
       detail: "Password reset e-mail has been sent.",
     });

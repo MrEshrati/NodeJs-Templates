@@ -9,6 +9,7 @@ const PasswordResetToken = require("../../models/passwordResetToken.model");
 const EmailChangeToken = require("../../models/emailChangeToken.model");
 const LoginThrottle = require("../../models/loginThrottle.model");
 const RequestThrottle = require("../../models/requestThrottle.model");
+const AccountEmailJob = require("../../models/accountEmailJob.model");
 
 const objectId = () => new mongoose.Types.ObjectId();
 
@@ -69,6 +70,42 @@ test("temporary token schemas have zero-delay TTL indexes", () => {
   assert.equal(hasTtlIndex(OtpCode), true);
   assert.equal(hasTtlIndex(LoginThrottle), true);
   assert.equal(hasTtlIndex(RequestThrottle), true);
+  assert.equal(hasTtlIndex(AccountEmailJob), true);
+});
+
+test("account-email jobs validate queue state and declare a claim index", async () => {
+  const job = new AccountEmailJob({
+    type: "password_reset",
+    email: " USER@Example.COM ",
+    availableAt: new Date(),
+    expiresAt: new Date(Date.now() + 60_000),
+  });
+
+  assert.equal(job.email, "user@example.com");
+  assert.equal(job.status, "pending");
+  assert.equal(job.attempts, 0);
+  await assert.doesNotReject(job.validate());
+
+  const invalid = new AccountEmailJob({
+    type: "unsupported",
+    email: "user@example.com",
+    attempts: 1.5,
+    availableAt: new Date(),
+    expiresAt: new Date(Date.now() + 60_000),
+  });
+  const errors = (await getValidationError(invalid)).errors;
+
+  assert.ok(errors.type);
+  assert.ok(errors.attempts);
+  assert.ok(
+    AccountEmailJob.schema.indexes().some(
+      ([keys, options]) =>
+        keys.status === 1 &&
+        keys.availableAt === 1 &&
+        keys.lockedUntil === 1 &&
+        options.name === "account_email_job_claim_idx",
+    ),
+  );
 });
 
 test("OTP schema limits failed attempts", async () => {

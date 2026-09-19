@@ -104,6 +104,12 @@ test(
     const PasswordResetToken = require(
       fromProject("models/passwordResetToken.model.js"),
     );
+    const AccountEmailJob = require(
+      fromProject("models/accountEmailJob.model.js"),
+    );
+    const { processNextAccountEmailJob } = require(
+      fromProject("workers/accountEmail.worker.js"),
+    );
     const RefreshSession = require(
       fromProject("models/refreshSession.model.js"),
     );
@@ -160,6 +166,14 @@ test(
     });
     assert.equal(resetEmails.length, 0);
     assert.equal(await PasswordResetToken.countDocuments(), 0);
+    assert.equal(await AccountEmailJob.countDocuments(), 1);
+
+    const unknownJob = await processNextAccountEmailJob();
+
+    assert.equal(unknownJob.outcome, "discarded");
+    assert.equal(resetEmails.length, 0);
+    assert.equal(await PasswordResetToken.countDocuments(), 0);
+    assert.equal(await AccountEmailJob.countDocuments(), 0);
 
     const resetRequest = await postJson(baseUrl, "/password/reset", {
       email: TEST_EMAIL,
@@ -167,7 +181,14 @@ test(
 
     assert.equal(resetRequest.response.status, 200);
     assert.deepEqual(resetRequest.payload, unknownAccountRequest.payload);
+    assert.equal(resetEmails.length, 0);
+    assert.equal(await AccountEmailJob.countDocuments(), 1);
+
+    const sentJob = await processNextAccountEmailJob();
+
+    assert.equal(sentJob.outcome, "sent");
     assert.equal(resetEmails.length, 1);
+    assert.equal(await AccountEmailJob.countDocuments(), 0);
 
     const resetEmail = resetEmails[0];
 

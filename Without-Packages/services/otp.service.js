@@ -3,6 +3,10 @@ const User = require("../models/user.model");
 const { sendOtpCodeEmail } = require("./email.service");
 const { issueTokenPair } = require("./token.service");
 const {
+  ACCOUNT_EMAIL_JOB_TYPES,
+  enqueueAccountEmailJob,
+} = require("./accountEmailJob.service");
+const {
   generateOtpCode,
   hashOtpCode,
   verifyOtpCodeHash,
@@ -75,6 +79,12 @@ const issueOtpCodeAfterCooldown = async (userId) => {
 };
 
 const requestOtpCode = async (email) => {
+  await enqueueAccountEmailJob(ACCOUNT_EMAIL_JOB_TYPES.OTP_LOGIN, email);
+
+  return { status: "accepted" };
+};
+
+const deliverOtpCodeEmail = async (email) => {
   const user = await User.findOne({
     email,
     isActive: true,
@@ -84,8 +94,7 @@ const requestOtpCode = async (email) => {
 
   if (!user) {
     return {
-      status: "accepted",
-      sent: false,
+      status: "discarded",
       previewUrl: null,
     };
   }
@@ -93,8 +102,7 @@ const requestOtpCode = async (email) => {
   const issuedCode = await issueOtpCodeAfterCooldown(user._id);
   if (issuedCode === null) {
     return {
-      status: "accepted",
-      sent: false,
+      status: "discarded",
       previewUrl: null,
     };
   }
@@ -112,8 +120,7 @@ const requestOtpCode = async (email) => {
     throw error;
   }
   return {
-    status: "accepted",
-    sent: true,
+    status: "sent",
     messageId: emailResult.messageId,
     previewUrl: emailResult.previewUrl,
   };
@@ -232,6 +239,7 @@ const verifyOtpLogin = async (email, code) => {
 module.exports = {
   issueOtpCodeAfterCooldown,
   requestOtpCode,
+  deliverOtpCodeEmail,
   inspectOtpCode,
   consumeOtpCode,
   verifyOtpLogin,

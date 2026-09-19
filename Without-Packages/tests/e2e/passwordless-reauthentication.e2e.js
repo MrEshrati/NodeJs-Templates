@@ -117,6 +117,12 @@ test(
 
     const User = require(fromProject("models/user.model.js"));
     const OtpCode = require(fromProject("models/otpCode.model.js"));
+    const AccountEmailJob = require(
+      fromProject("models/accountEmailJob.model.js"),
+    );
+    const { processNextAccountEmailJob } = require(
+      fromProject("workers/accountEmail.worker.js"),
+    );
     const EmailChangeToken = require(
       fromProject("models/emailChangeToken.model.js"),
     );
@@ -170,7 +176,14 @@ test(
     );
 
     assert.equal(emailChangeOtpRequest.response.status, 200);
+    assert.equal(otpEmails.length, 0);
+    assert.equal(await AccountEmailJob.countDocuments(), 1);
+
+    const emailChangeOtpJob = await processNextAccountEmailJob();
+
+    assert.equal(emailChangeOtpJob.outcome, "sent");
     assert.equal(otpEmails.length, 1);
+    assert.equal(await AccountEmailJob.countDocuments(), 0);
 
     const emailChangeOtp = otpEmails[0];
 
@@ -257,7 +270,14 @@ test(
     );
 
     assert.equal(deletionOtpRequest.response.status, 200);
+    assert.equal(otpEmails.length, 1);
+    assert.equal(await AccountEmailJob.countDocuments(), 1);
+
+    const deletionOtpJob = await processNextAccountEmailJob();
+
+    assert.equal(deletionOtpJob.outcome, "sent");
     assert.equal(otpEmails.length, 2);
+    assert.equal(await AccountEmailJob.countDocuments(), 0);
 
     const deletionOtp = otpEmails[1];
 

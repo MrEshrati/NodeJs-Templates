@@ -122,6 +122,7 @@ routes/       Endpoint paths and middleware order
 services/     Account workflows and database operations
 utils/        JWT, token, and OTP cryptographic helpers
 validators/   Package-free request validation and normalization
+workers/      Durable account-email queue processing
 tests/        Unit, schema, route-contract, and HTTP integration tests
 app.js        Express construction and explicit server startup
 ```
@@ -358,8 +359,16 @@ stored as keyed HMACs rather than raw email or client values.
 
 When `NODE_ENV=development`, Nodemailer creates an Ethereal test account
 automatically. Messages are not delivered to real inboxes. When Ethereal
-returns a preview URL, the controller prints it to the server terminal for
+returns a preview URL, the account-email worker prints it to the server terminal for
 manual testing. Preview URLs are suppressed in test mode.
+
+Password-reset, OTP, and verification-resend requests always insert the same
+short-lived MongoDB queue document and return without looking up the account or
+waiting for SMTP. The worker atomically leases each job, silently discards
+unknown or ineligible accounts, and performs eligible token and email work in
+the background. Failed deliveries use bounded retries; expired and completed
+jobs are removed. This keeps the public response path materially uniform for
+known and unknown addresses.
 
 The frontend must own the pages referenced by email links:
 

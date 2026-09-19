@@ -53,6 +53,9 @@ test("password-reset email states the one-hour expiry policy", async () => {
     assert.equal(transportOptions.disableFileAccess, true);
     assert.equal(transportOptions.disableUrlAccess, true);
     assert.equal(transportOptions.maxRecipients, 1);
+    assert.equal(transportOptions.connectionTimeout, 10_000);
+    assert.equal(transportOptions.greetingTimeout, 10_000);
+    assert.equal(transportOptions.socketTimeout, 20_000);
   } finally {
     if (originalFrontendUrl === undefined) delete process.env.FRONTEND_URL;
     else process.env.FRONTEND_URL = originalFrontendUrl;

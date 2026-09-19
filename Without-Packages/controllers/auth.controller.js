@@ -111,10 +111,10 @@ exports.verifyEmail = async (req, res, next) => {
 exports.resendVerification = async (req, res, next) => {
   try {
     const { email } = req.validatedBody;
-    const emailResult = await resendEmailVerification(email);
+    const result = await resendEmailVerification(email);
 
-    if (emailResult.previewUrl) {
-      console.log(`Email preview: ${emailResult.previewUrl}`);
+    if (result.status !== "accepted") {
+      throw new Error("Unexpected email verification resend service status.");
     }
 
     res.status(200).json({

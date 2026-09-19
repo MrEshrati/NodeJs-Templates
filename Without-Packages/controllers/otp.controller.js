@@ -13,10 +13,6 @@ exports.requestOtp = async (req, res, next) => {
       throw new Error("Unexpected OTP request service status.");
     }
 
-    if (result.previewUrl) {
-      console.log(`OTP email preview: ${result.previewUrl}`);
-    }
-
     return res.status(200).json({
       detail:
         "If an account exists for that address, a sign-in code has been sent to it.",

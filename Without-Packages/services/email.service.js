@@ -28,6 +28,9 @@ async function createEtherealTransporter() {
       disableFileAccess: true,
       disableUrlAccess: true,
       maxRecipients: 1,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     },
     {
       from: `"Account Template" <${testAccount.user}>`,

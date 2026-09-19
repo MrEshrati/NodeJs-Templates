@@ -88,6 +88,12 @@ test(
 
     const User = require(fromProject("models/user.model.js"));
     const OtpCode = require(fromProject("models/otpCode.model.js"));
+    const AccountEmailJob = require(
+      fromProject("models/accountEmailJob.model.js"),
+    );
+    const { processNextAccountEmailJob } = require(
+      fromProject("workers/accountEmail.worker.js"),
+    );
     const RefreshSession = require(
       fromProject("models/refreshSession.model.js"),
     );
@@ -129,6 +135,14 @@ test(
     });
     assert.equal(otpEmails.length, 0);
     assert.equal(await OtpCode.countDocuments(), 0);
+    assert.equal(await AccountEmailJob.countDocuments(), 1);
+
+    const unknownJob = await processNextAccountEmailJob();
+
+    assert.equal(unknownJob.outcome, "discarded");
+    assert.equal(otpEmails.length, 0);
+    assert.equal(await OtpCode.countDocuments(), 0);
+    assert.equal(await AccountEmailJob.countDocuments(), 0);
 
     const otpRequest = await postJson(baseUrl, "/auth/otp/request", {
       email: TEST_EMAIL,
@@ -136,7 +150,14 @@ test(
 
     assert.equal(otpRequest.response.status, 200);
     assert.deepEqual(otpRequest.payload, unknownAccountRequest.payload);
+    assert.equal(otpEmails.length, 0);
+    assert.equal(await AccountEmailJob.countDocuments(), 1);
+
+    const sentJob = await processNextAccountEmailJob();
+
+    assert.equal(sentJob.outcome, "sent");
     assert.equal(otpEmails.length, 1);
+    assert.equal(await AccountEmailJob.countDocuments(), 0);
 
     const otpEmail = otpEmails[0];
 
@@ -157,7 +178,13 @@ test(
 
     assert.equal(cooldownRequest.response.status, 200);
     assert.deepEqual(cooldownRequest.payload, otpRequest.payload);
+    assert.equal(await AccountEmailJob.countDocuments(), 1);
+
+    const cooldownJob = await processNextAccountEmailJob();
+
+    assert.equal(cooldownJob.outcome, "discarded");
     assert.equal(otpEmails.length, 1);
+    assert.equal(await AccountEmailJob.countDocuments(), 0);
 
     const otpAfterCooldownRequest = await OtpCode.findById(storedOtp._id).lean();
 

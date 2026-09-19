@@ -90,6 +90,12 @@ test(
     const EmailVerificationToken = require(
       fromProject("models/emailVerificationToken.model.js"),
     );
+    const AccountEmailJob = require(
+      fromProject("models/accountEmailJob.model.js"),
+    );
+    const { processNextAccountEmailJob } = require(
+      fromProject("workers/accountEmail.worker.js"),
+    );
     const RefreshSession = require(
       fromProject("models/refreshSession.model.js"),
     );
@@ -129,6 +135,14 @@ test(
     assert.deepEqual(unknownAccountRequest.payload, { detail: "ok" });
     assert.equal(verificationEmails.length, 0);
     assert.equal(await EmailVerificationToken.countDocuments(), 0);
+    assert.equal(await AccountEmailJob.countDocuments(), 1);
+
+    const unknownJob = await processNextAccountEmailJob();
+
+    assert.equal(unknownJob.outcome, "discarded");
+    assert.equal(verificationEmails.length, 0);
+    assert.equal(await EmailVerificationToken.countDocuments(), 0);
+    assert.equal(await AccountEmailJob.countDocuments(), 0);
 
     const resendRequest = await postJson(
       baseUrl,
@@ -138,7 +152,14 @@ test(
 
     assert.equal(resendRequest.response.status, 200);
     assert.deepEqual(resendRequest.payload, unknownAccountRequest.payload);
+    assert.equal(verificationEmails.length, 0);
+    assert.equal(await AccountEmailJob.countDocuments(), 1);
+
+    const sentJob = await processNextAccountEmailJob();
+
+    assert.equal(sentJob.outcome, "sent");
     assert.equal(verificationEmails.length, 1);
+    assert.equal(await AccountEmailJob.countDocuments(), 0);
 
     const verificationEmail = verificationEmails[0];
 
@@ -161,7 +182,13 @@ test(
 
     assert.equal(cooldownRequest.response.status, 200);
     assert.deepEqual(cooldownRequest.payload, resendRequest.payload);
+    assert.equal(await AccountEmailJob.countDocuments(), 1);
+
+    const cooldownJob = await processNextAccountEmailJob();
+
+    assert.equal(cooldownJob.outcome, "discarded");
     assert.equal(verificationEmails.length, 1);
+    assert.equal(await AccountEmailJob.countDocuments(), 0);
 
     const tokenAfterCooldownRequest = await EmailVerificationToken.findById(
       storedToken._id,
@@ -196,8 +223,14 @@ test(
 
     assert.equal(verifiedAccountRequest.response.status, 200);
     assert.deepEqual(verifiedAccountRequest.payload, resendRequest.payload);
+    assert.equal(await AccountEmailJob.countDocuments(), 1);
+
+    const verifiedJob = await processNextAccountEmailJob();
+
+    assert.equal(verifiedJob.outcome, "discarded");
     assert.equal(verificationEmails.length, 1);
     assert.equal(await EmailVerificationToken.countDocuments(), 0);
+    assert.equal(await AccountEmailJob.countDocuments(), 0);
 
     const login = await postJson(baseUrl, "/auth/login", {
       email: TEST_EMAIL,
