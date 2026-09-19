@@ -494,3 +494,7 @@ dependencies with `npm ci`:
 
 Because email delivery and Google verification are mocked, the E2E job does
 not require email-provider or Google credentials.
+
+## License
+
+This project is available under the [ISC License](LICENSE).
