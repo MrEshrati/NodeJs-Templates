@@ -58,6 +58,11 @@ const documentedNotificationEndpoints = [
   "DELETE /notifications/devices",
 ];
 
+const documentedPaymentEndpoints = [
+  "POST /create-payment",
+  "POST /dev/simulate",
+];
+
 test("README documents every account API operation", () => {
   assert.equal(documentedEndpoints.length, 17);
 
@@ -77,6 +82,35 @@ test("README documents every notification API operation", () => {
 
   for (const endpoint of documentedNotificationEndpoints) {
     assert.ok(readme.includes(`\`${endpoint}\``), endpoint);
+  }
+});
+
+test("README documents every payment API operation", () => {
+  assert.equal(documentedPaymentEndpoints.length, 2);
+
+  for (const endpoint of documentedPaymentEndpoints) {
+    assert.ok(readme.includes(`\`${endpoint}\``), endpoint);
+  }
+});
+
+test("README documents payment modes, contracts, and safety policies", () => {
+  const requiredPaymentContent = [
+    "Account, Notification, and Payment API",
+    "`201 Created`",
+    "`200 OK`",
+    "USD cents",
+    "whole IRR",
+    "`idempotency_key`",
+    "authenticated user",
+    "`PAYMENT_FAKE_MODE=true` never creates",
+    "20 requests per minute",
+    "60 requests per minute",
+    "`502 payment_provider_error`",
+    "live Stripe and ZarinPal requests and responses are tested with injected mock",
+  ];
+
+  for (const content of requiredPaymentContent) {
+    assert.ok(readme.includes(content), content);
   }
 });
 

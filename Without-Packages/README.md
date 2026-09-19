@@ -1,10 +1,11 @@
-# Account and Notification API — Without Packages
+# Account, Notification, and Payment API — Without Packages
 
-This project is a complete account-management and notification API built with
-Node.js, Express, and MongoDB. The “without packages” approach means
+This project is a complete account-management, notification, and payment API
+built with Node.js, Express, and MongoDB. The “without packages” approach means
 security-sensitive building blocks such as request validation, JWT signing and
-verification, OTP hashing, cursor handling, and throttling logic are
-implemented with Node.js platform APIs instead of extra convenience libraries.
+verification, OTP hashing, cursor handling, throttling logic, and payment HTTP
+adapters are implemented with Node.js platform APIs instead of extra
+convenience libraries.
 
 Packages are still used where they provide the required platform integration:
 
@@ -251,6 +252,68 @@ most 20 device tokens, with the least recently updated excess tokens removed
 inside the registration transaction. Unregistering an absent owned token is
 idempotent and still returns `204`.
 
+### Payments
+
+Payment endpoints require an access token. Every stored payment and every
+idempotency key is scoped to the authenticated user, so one user cannot retrieve
+or simulate another user's payment. The active provider is selected once at
+startup with `PAYMENT_PROVIDER`; changing the provider or fake-mode setting
+requires a server restart.
+
+| Endpoint | Availability | Body | Result |
+| --- | --- | --- | --- |
+| `POST /create-payment` | Fake and live modes | `amount`, `currency`, optional `description`, optional `idempotency_key` | Creates a provider checkout with `201 Created`, or returns the existing checkout with `200 OK` when the idempotency key was already used. |
+| `POST /dev/simulate` | Only when `PAYMENT_FAKE_MODE=true` | `payment_id`, `outcome` | Applies a fake provider outcome and returns the serialized payment. |
+
+`amount` is always a positive safe integer. Stripe accepts `USD`, with the
+amount expressed in USD cents: `1099` means `$10.99`. ZarinPal accepts `IRR`,
+with the amount expressed as whole IRR: `50000` means `50000` IRR.
+`description` is limited to 500 characters and `idempotency_key` to 255
+characters. Use one idempotency key for one logical payment and never reuse it
+for a different order. Repeating the same authenticated user's request with the
+same key does not create another database payment or provider request.
+
+A Stripe checkout response contains only the internal payment identifier and
+the browser-safe Stripe values:
+
+```json
+{
+  "payment_id": "payment-id",
+  "client_secret": "provider-client-secret",
+  "publishable_key": "pk_test_or_live_value"
+}
+```
+
+A ZarinPal checkout response contains the internal payment identifier and the
+URL to which the browser should be redirected:
+
+```json
+{
+  "payment_id": "payment-id",
+  "redirect_url": "https://payment.zarinpal.com/pg/StartPay/authority"
+}
+```
+
+In fake mode, Stripe accepts the simulation outcomes `succeeded`, `failed`, and
+`refunded`; a refund covers the full stored amount. Fake ZarinPal accepts
+`succeeded` and `failed`. Repeating an already-applied outcome is idempotent.
+`PAYMENT_FAKE_MODE=true` never creates real charges or calls Stripe or
+ZarinPal. The `/dev/simulate` route does not exist in live mode.
+
+With `PAYMENT_FAKE_MODE=false`, payment creation calls only the provider selected
+by `PAYMENT_PROVIDER`. Live Stripe requires its secret and publishable keys;
+live ZarinPal requires its merchant ID and callback URL. Provider credentials,
+raw responses, and raw provider error messages are never returned to clients.
+A safely classified upstream failure returns `502 payment_provider_error`.
+
+To test Stripe locally, set `PAYMENT_PROVIDER=stripe` and
+`PAYMENT_FAKE_MODE=true`, restart the server, sign in, and send an access-token
+authenticated `POST /create-payment` request with a USD-cent amount. Copy the
+returned `payment_id` into `POST /dev/simulate`. To test ZarinPal, change
+`PAYMENT_PROVIDER` to `zarinpal`, restart, create an IRR payment, and simulate a
+supported outcome. Because the provider choice is fixed at startup, restarting
+between the two provider tests is required.
+
 ## Token and code lifetimes
 
 | Item | Lifetime or policy |
@@ -282,6 +345,10 @@ identifier:
 Notification endpoints allow 120 requests per minute for one client
 identifier. This shared notification limit covers feed reads, actions,
 preference operations, and device registration or removal.
+
+Payment creation allows 20 requests per minute for one client identifier. The
+fake-only payment simulation endpoint allows 60 requests per minute. Both
+limits are applied before authentication and request validation.
 
 Throttled responses include `Retry-After`. Request and login identifiers are
 stored as keyed HMACs rather than raw email or client values.
@@ -321,6 +388,11 @@ codes and messages. Malformed JSON returns `400 invalid_json`, oversized bodies
 return `413 payload_too_large`, and unknown routes return `404 not_found`.
 Unexpected server errors return a generic `500 internal_error`; their original
 details are logged server-side and are not sent to clients.
+
+Payment-provider rejections and connectivity failures are normalized to
+`502 payment_provider_error`. Provider credentials, raw response bodies, raw
+diagnostic messages, and internal request objects are not included in the
+client response.
 
 Registration, OTP request, password-reset request, verification resend, and
 email-change availability responses avoid revealing whether an address exists.
@@ -370,14 +442,18 @@ The E2E tests run sequentially against the shared test database and skip
 safely when `TEST_DB_URL` is absent. Email delivery and Google token
 verification are mocked, but the HTTP routes, services, password hashing,
 throttles, token creation, notification ownership and pagination, and MongoDB
-records are real. The regular `npm test` command does not discover the
-`.e2e.js` files.
+records are real. Payment E2E coverage uses both fake providers and verifies
+authentication, idempotent creation, ownership isolation, supported outcomes,
+refunds, and the absence of the simulation route in live mode. The regular
+`npm test` command does not discover the `.e2e.js` files.
 
 The tests use Node.js's built-in test runner. They cover validators,
 cryptographic utilities, middleware, Mongoose schemas, route registration,
 service boundaries, startup configuration, notification workflows, and real
-HTTP error and validation paths. Unit and HTTP tests do not require MongoDB,
-Google, or email access.
+HTTP error and validation paths. Fake payment workflows run locally, while
+live Stripe and ZarinPal requests and responses are tested with injected mock
+HTTP functions. Unit and HTTP tests do not require MongoDB, Google, email, or
+payment-provider access.
 
 The repository workflow at `.github/workflows/without-packages-tests.yml` runs
 two independent Node.js 24 jobs whenever this project or its workflow changes
