@@ -74,6 +74,22 @@ exports.createPayment = async (req, res, next) => {
       ...req.validatedBody,
     });
 
+    if (result?.status === "conflict") {
+      throw new AppError(
+        "Idempotency key was already used with different payment details.",
+        409,
+        "idempotency_conflict",
+      );
+    }
+
+    if (result?.status === "processing") {
+      throw new AppError(
+        "Payment creation is still processing.",
+        409,
+        "payment_in_progress",
+      );
+    }
+
     if (!CREATE_PAYMENT_STATUSES.has(result?.status)) {
       throw new Error("Unexpected payment creation service status.");
     }

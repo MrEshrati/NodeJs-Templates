@@ -1,6 +1,7 @@
 const MAX_DESCRIPTION_LENGTH = 500;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 255;
 const OBJECT_ID_PATTERN = /^[a-fA-F0-9]{24}$/;
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._~-]+$/;
 
 const PROVIDER_RULES = Object.freeze({
   stripe: Object.freeze({
@@ -135,6 +136,7 @@ const validateDescription = (requestBody, data, fields) => {
 
 const validateIdempotencyKey = (requestBody, data, fields) => {
   if (!Object.prototype.hasOwnProperty.call(requestBody, "idempotency_key")) {
+    fields.idempotency_key = [requiredError()];
     return;
   }
 
@@ -164,6 +166,14 @@ const validateIdempotencyKey = (requestBody, data, fields) => {
       {
         code: "max_length",
         message: "Ensure this field has no more than 255 characters.",
+      },
+    ];
+  } else if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+    fields.idempotency_key = [
+      {
+        code: "invalid",
+        message:
+          "Use only letters, numbers, periods, underscores, tildes, and hyphens.",
       },
     ];
   } else {

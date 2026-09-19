@@ -1,4 +1,7 @@
+const crypto = require("node:crypto");
+const PaymentProviderError = require("../errors/PaymentProviderError");
 const Payment = require("../models/payment.model");
+const PaymentCreation = require("../models/paymentCreation.model");
 const {
   getConfiguredPaymentProvider,
 } = require("./paymentProvider.service");
@@ -17,6 +20,14 @@ const PAYMENT_STATUSES = new Set([
   "failed",
   "refunded",
 ]);
+
+const PAYMENT_CREATION_STATUSES = new Set([
+  "processing",
+  "succeeded",
+  "failed",
+]);
+const MINIMUM_SECRET_BYTES = 32;
+const PAYMENT_ROUTE = "/create-payment";
 
 const assertPaymentProvider = (paymentProvider) => {
   if (
@@ -42,8 +53,83 @@ const assertProviderResult = (providerResult) => {
   }
 };
 
+const assertIdempotencyInput = ({ userId, idempotencyKey }) => {
+  if (
+    userId === undefined ||
+    userId === null ||
+    String(userId).trim() === ""
+  ) {
+    throw new TypeError("userId must be a non-empty value.");
+  }
+
+  if (
+    typeof idempotencyKey !== "string" ||
+    idempotencyKey.trim() === ""
+  ) {
+    throw new TypeError("idempotencyKey must be a non-empty string.");
+  }
+};
+
+const getIdempotencySecret = (idempotencySecret) => {
+  if (
+    typeof idempotencySecret !== "string" ||
+    Buffer.byteLength(idempotencySecret, "utf8") < MINIMUM_SECRET_BYTES
+  ) {
+    throw new Error(
+      "PAYMENT_IDEMPOTENCY_SECRET must contain at least 32 bytes.",
+    );
+  }
+
+  return idempotencySecret;
+};
+
+const createRequestFingerprint = ({
+  provider,
+  amount,
+  currency,
+  description,
+}) => {
+  const canonicalRequest = JSON.stringify({
+    version: 1,
+    method: "POST",
+    route: PAYMENT_ROUTE,
+    provider,
+    amount,
+    currency,
+    description: description ?? null,
+  });
+
+  return crypto
+    .createHash("sha256")
+    .update("payment-request-fingerprint:v1\0", "utf8")
+    .update(canonicalRequest, "utf8")
+    .digest("hex");
+};
+
+const createProviderRequestKey = ({
+  userId,
+  idempotencyKey,
+  idempotencySecret,
+}) => {
+  const digest = crypto
+    .createHmac("sha256", getIdempotencySecret(idempotencySecret))
+    .update("payment-provider-idempotency:v1\0", "utf8")
+    .update(String(userId), "utf8")
+    .update("\0", "utf8")
+    .update(idempotencyKey, "utf8")
+    .digest("hex");
+
+  return `payment_v1_${digest}`;
+};
+
 const findIdempotentPayment = ({ userId, idempotencyKey }) =>
   Payment.findOne({
+    user: userId,
+    idempotencyKey,
+  }).lean();
+
+const findCreationClaim = ({ userId, idempotencyKey }) =>
+  PaymentCreation.findOne({
     user: userId,
     idempotencyKey,
   }).lean();
@@ -67,6 +153,134 @@ const buildPaymentResult = ({ status, payment, paymentProvider }) => {
     payment,
     checkout: paymentProvider.getCheckout(payment),
   };
+};
+
+const assertCreationClaim = (claim) => {
+  if (
+    !isObject(claim) ||
+    typeof claim.requestFingerprint !== "string" ||
+    !PAYMENT_CREATION_STATUSES.has(claim.status) ||
+    (claim.provider !== "stripe" && claim.provider !== "zarinpal")
+  ) {
+    throw new Error("Unexpected payment creation claim data.");
+  }
+};
+
+const getStoredPaymentFingerprint = (payment) => {
+  if (
+    !isObject(payment) ||
+    (payment.provider !== "stripe" && payment.provider !== "zarinpal") ||
+    !Number.isSafeInteger(payment.amount) ||
+    payment.amount < 1 ||
+    typeof payment.currency !== "string" ||
+    (payment.description !== undefined &&
+      typeof payment.description !== "string")
+  ) {
+    throw new Error("Unexpected stored payment data.");
+  }
+
+  return createRequestFingerprint({
+    provider: payment.provider,
+    amount: payment.amount,
+    currency: payment.currency,
+    description: payment.description,
+  });
+};
+
+const markCreationSucceeded = ({ claim, payment }) =>
+  PaymentCreation.updateOne(
+    {
+      _id: claim._id,
+      requestFingerprint: claim.requestFingerprint,
+      status: "processing",
+    },
+    {
+      $set: {
+        status: "succeeded",
+        payment: payment._id,
+        failureKind: null,
+        failureMessage: null,
+      },
+    },
+    { runValidators: true },
+  );
+
+const markCreationFailed = ({ claim, error }) =>
+  PaymentCreation.updateOne(
+    {
+      _id: claim._id,
+      requestFingerprint: claim.requestFingerprint,
+      status: "processing",
+    },
+    {
+      $set: {
+        status: "failed",
+        payment: null,
+        failureKind: error.kind,
+        failureMessage: error.message.slice(0, 255),
+      },
+    },
+    { runValidators: true },
+  );
+
+const resolveCreationClaim = async ({
+  claim,
+  requestFingerprint,
+  userId,
+  idempotencyKey,
+  paymentProvider,
+}) => {
+  assertCreationClaim(claim);
+
+  if (
+    claim.requestFingerprint !== requestFingerprint ||
+    claim.provider !== paymentProvider.provider
+  ) {
+    return { status: "conflict" };
+  }
+
+  if (claim.status === "failed") {
+    if (
+      (claim.failureKind !== "rejected" &&
+        claim.failureKind !== "unreachable") ||
+      typeof claim.failureMessage !== "string" ||
+      claim.failureMessage.trim() === ""
+    ) {
+      throw new Error("Unexpected failed payment creation claim data.");
+    }
+
+    throw new PaymentProviderError(claim.failureMessage, {
+      provider: claim.provider,
+      kind: claim.failureKind,
+    });
+  }
+
+  const payment = await findIdempotentPayment({
+    userId,
+    idempotencyKey,
+  });
+
+  if (!payment) {
+    if (claim.status === "processing") {
+      return { status: "processing" };
+    }
+
+    throw new Error("Completed payment creation has no stored payment.");
+  }
+
+  if (getStoredPaymentFingerprint(payment) !== requestFingerprint) {
+    throw new Error("Stored payment does not match its creation claim.");
+  }
+
+  if (claim.status === "processing") {
+    await markCreationSucceeded({ claim, payment });
+  }
+
+  return buildPaymentResult({
+    status: "existing",
+    payment,
+    paymentProvider,
+  });
 };
 
 const assertSimulationOutcome = (provider, outcome) => {
@@ -127,33 +341,152 @@ const createPayment = async (
     description,
     idempotencyKey,
   } = {},
-  { paymentProvider = getConfiguredPaymentProvider() } = {},
+  {
+    paymentProvider = getConfiguredPaymentProvider(),
+    idempotencySecret = process.env.PAYMENT_IDEMPOTENCY_SECRET,
+  } = {},
 ) => {
   assertPaymentProvider(paymentProvider);
+  assertIdempotencyInput({ userId, idempotencyKey });
 
-  await Payment.init();
+  const requestFingerprint = createRequestFingerprint({
+    provider: paymentProvider.provider,
+    amount,
+    currency,
+    description,
+  });
+  const providerRequestKey = createProviderRequestKey({
+    userId,
+    idempotencyKey,
+    idempotencySecret,
+  });
 
-  if (idempotencyKey !== undefined) {
-    const existingPayment = await findIdempotentPayment({
+  await Promise.all([Payment.init(), PaymentCreation.init()]);
+
+  const existingClaim = await findCreationClaim({
+    userId,
+    idempotencyKey,
+  });
+
+  if (existingClaim) {
+    return resolveCreationClaim({
+      claim: existingClaim,
+      requestFingerprint,
+      userId,
+      idempotencyKey,
+      paymentProvider,
+    });
+  }
+
+  const legacyPayment = await findIdempotentPayment({
+    userId,
+    idempotencyKey,
+  });
+
+  if (legacyPayment) {
+    if (getStoredPaymentFingerprint(legacyPayment) !== requestFingerprint) {
+      return { status: "conflict" };
+    }
+
+    const completedClaimData = {
+      user: userId,
+      idempotencyKey,
+      requestFingerprint,
+      provider: paymentProvider.provider,
+      providerRequestKey,
+      status: "succeeded",
+      payment: legacyPayment._id,
+    };
+
+    try {
+      await PaymentCreation.create(completedClaimData);
+    } catch (error) {
+      if (error?.code !== 11000) {
+        throw error;
+      }
+
+      const winningClaim = await findCreationClaim({
+        userId,
+        idempotencyKey,
+      });
+
+      if (!winningClaim) {
+        throw error;
+      }
+
+      return resolveCreationClaim({
+        claim: winningClaim,
+        requestFingerprint,
+        userId,
+        idempotencyKey,
+        paymentProvider,
+      });
+    }
+
+    return buildPaymentResult({
+      status: "existing",
+      payment: legacyPayment,
+      paymentProvider,
+    });
+  }
+
+  let claimDocument;
+
+  try {
+    claimDocument = await PaymentCreation.create({
+      user: userId,
+      idempotencyKey,
+      requestFingerprint,
+      provider: paymentProvider.provider,
+      providerRequestKey,
+      status: "processing",
+    });
+  } catch (error) {
+    if (error?.code !== 11000) {
+      throw error;
+    }
+
+    const winningClaim = await findCreationClaim({
       userId,
       idempotencyKey,
     });
 
-    if (existingPayment) {
-      return buildPaymentResult({
-        status: "existing",
-        payment: existingPayment,
-        paymentProvider,
-      });
+    if (!winningClaim) {
+      throw error;
     }
+
+    return resolveCreationClaim({
+      claim: winningClaim,
+      requestFingerprint,
+      userId,
+      idempotencyKey,
+      paymentProvider,
+    });
   }
 
-  const providerResult = await paymentProvider.createPayment({
-    amount,
-    currency,
-    description,
-    idempotencyKey,
-  });
+  if (!claimDocument || typeof claimDocument.toObject !== "function") {
+    throw new Error("Unexpected payment creation claim result.");
+  }
+
+  const claim = claimDocument.toObject();
+  assertCreationClaim(claim);
+
+  let providerResult;
+
+  try {
+    providerResult = await paymentProvider.createPayment({
+      amount,
+      currency,
+      description,
+      idempotencyKey: providerRequestKey,
+    });
+  } catch (error) {
+    if (error instanceof PaymentProviderError) {
+      await markCreationFailed({ claim, error });
+    }
+
+    throw error;
+  }
 
   assertProviderResult(providerResult);
 
@@ -170,16 +503,14 @@ const createPayment = async (
     paymentData.description = description;
   }
 
-  if (idempotencyKey !== undefined) {
-    paymentData.idempotencyKey = idempotencyKey;
-  }
+  paymentData.idempotencyKey = idempotencyKey;
 
   let paymentDocument;
 
   try {
     paymentDocument = await Payment.create(paymentData);
   } catch (error) {
-    if (error?.code !== 11000 || idempotencyKey === undefined) {
+    if (error?.code !== 11000) {
       throw error;
     }
 
@@ -191,6 +522,12 @@ const createPayment = async (
     if (!existingPayment) {
       throw error;
     }
+
+    if (getStoredPaymentFingerprint(existingPayment) !== requestFingerprint) {
+      throw new Error("Stored payment does not match its creation claim.");
+    }
+
+    await markCreationSucceeded({ claim, payment: existingPayment });
 
     return buildPaymentResult({
       status: "existing",
@@ -204,6 +541,12 @@ const createPayment = async (
   }
 
   const payment = paymentDocument.toObject();
+
+  if (getStoredPaymentFingerprint(payment) !== requestFingerprint) {
+    throw new Error("Created payment does not match its creation claim.");
+  }
+
+  await markCreationSucceeded({ claim, payment });
 
   return buildPaymentResult({
     status: "created",

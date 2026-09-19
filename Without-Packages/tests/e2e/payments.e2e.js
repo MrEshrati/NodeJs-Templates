@@ -13,6 +13,8 @@ const {
 const JWT_SECRET = "payment-e2e-jwt-secret-with-at-least-32-bytes";
 const REQUEST_THROTTLE_SECRET =
   "payment-e2e-request-throttle-secret-with-at-least-32-bytes";
+const PAYMENT_IDEMPOTENCY_SECRET =
+  "payment-e2e-idempotency-secret-with-at-least-32-bytes";
 
 const testDatabaseConfigured =
   typeof process.env.TEST_DB_URL === "string" &&
@@ -101,8 +103,12 @@ test(
   async (t) => {
     process.env.JWT_SECRET = JWT_SECRET;
     process.env.REQUEST_THROTTLE_SECRET = REQUEST_THROTTLE_SECRET;
+    process.env.PAYMENT_IDEMPOTENCY_SECRET = PAYMENT_IDEMPOTENCY_SECRET;
 
     const Payment = require(fromProject("models", "payment.model.js"));
+    const PaymentCreation = require(
+      fromProject("models", "paymentCreation.model.js"),
+    );
     const User = require(fromProject("models", "user.model.js"));
     const { createJwt } = require(fromProject("utils", "jwt.utils.js"));
     const servers = [];
@@ -160,6 +166,18 @@ test(
     assert.equal(unauthorized.response.status, 401);
     assert.equal(unauthorized.payload.code, "not_authenticated");
 
+    const missingIdempotencyKey = await requestJson(
+      stripeBaseUrl,
+      "/create-payment",
+      {
+        body: { amount: 1099, currency: "USD" },
+        token: ownerToken,
+      },
+    );
+    assert.equal(missingIdempotencyKey.response.status, 400);
+    assert.equal(missingIdempotencyKey.payload.code, "validation_error");
+    assert.ok(missingIdempotencyKey.payload.fields.idempotency_key);
+
     const stripeBody = {
       amount: 1099,
       currency: "USD",
@@ -187,6 +205,32 @@ test(
     assert.equal(stripeReplay.response.status, 200);
     assert.deepEqual(stripeReplay.payload, stripeCreated.payload);
     assert.equal(await Payment.countDocuments(), 1);
+    assert.equal(await PaymentCreation.countDocuments(), 1);
+
+    const stripeConflict = await requestJson(
+      stripeBaseUrl,
+      "/create-payment",
+      {
+        body: { ...stripeBody, amount: 2099 },
+        token: ownerToken,
+      },
+    );
+    assert.equal(stripeConflict.response.status, 409);
+    assert.equal(stripeConflict.payload.code, "idempotency_conflict");
+    assert.equal(await Payment.countDocuments(), 1);
+
+    const otherUserPayment = await requestJson(
+      stripeBaseUrl,
+      "/create-payment",
+      { body: stripeBody, token: otherToken },
+    );
+    assert.equal(otherUserPayment.response.status, 201);
+    assert.notEqual(
+      otherUserPayment.payload.payment_id,
+      stripeCreated.payload.payment_id,
+    );
+    assert.equal(await Payment.countDocuments(), 2);
+    assert.equal(await PaymentCreation.countDocuments(), 2);
 
     const hiddenPayment = await requestJson(
       stripeBaseUrl,
@@ -286,7 +330,8 @@ test(
 
     assert.equal(zarinpalReplay.response.status, 200);
     assert.deepEqual(zarinpalReplay.payload, zarinpalCreated.payload);
-    assert.equal(await Payment.countDocuments(), 2);
+    assert.equal(await Payment.countDocuments(), 3);
+    assert.equal(await PaymentCreation.countDocuments(), 3);
 
     const invalidRefund = await requestJson(
       zarinpalBaseUrl,

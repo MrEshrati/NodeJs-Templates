@@ -19,6 +19,7 @@ test("payment creation validators normalize provider-specific input", () => {
     amount: 50000,
     currency: " irr ",
     description: "   ",
+    idempotency_key: "zarinpal-order-1",
   });
 
   assert.deepEqual(stripeResult, {
@@ -34,6 +35,7 @@ test("payment creation validators normalize provider-specific input", () => {
     data: {
       amount: 50000,
       currency: "IRR",
+      idempotencyKey: "zarinpal-order-1",
     },
     fields: {},
   });
@@ -145,6 +147,9 @@ test("payment creation validator enforces description limits", () => {
 test("payment creation validator enforces idempotency-key limits", () => {
   const validate = createPaymentValidator("stripe");
 
+  const missing = validate({ amount: 1099, currency: "USD" });
+  assert.equal(missing.fields.idempotency_key[0].code, "required");
+
   for (const idempotencyKey of [null, 42, {}, []]) {
     const result = validate({
       amount: 1099,
@@ -171,6 +176,14 @@ test("payment creation validator enforces idempotency-key limits", () => {
   assert.equal(tooLong.fields.idempotency_key[0].code, "max_length");
   assert.equal("idempotencyKey" in blank.data, false);
   assert.equal("idempotencyKey" in tooLong.data, false);
+  assert.equal(
+    validate({
+      amount: 1099,
+      currency: "USD",
+      idempotency_key: "contains spaces",
+    }).fields.idempotency_key[0].code,
+    "invalid",
+  );
   assert.equal(
     validate({
       amount: 1099,

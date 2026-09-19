@@ -4,6 +4,7 @@ const SECRET_NAMES = [
   "OTP_SECRET",
   "LOGIN_THROTTLE_SECRET",
   "REQUEST_THROTTLE_SECRET",
+  "PAYMENT_IDEMPOTENCY_SECRET",
 ];
 const PAYMENT_PROVIDERS = new Set(["stripe", "zarinpal"]);
 const RUNTIME_ENVIRONMENTS = new Set(["development", "test", "production"]);

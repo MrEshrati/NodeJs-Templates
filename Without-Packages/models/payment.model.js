@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const Schema = mongoose.Schema;
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._~-]+$/;
 
 const isSafeNonNegativeInteger = (value) =>
   Number.isSafeInteger(value) && value >= 0;
@@ -76,6 +77,7 @@ const paymentSchema = new Schema(
       immutable: true,
       trim: true,
       maxlength: 255,
+      match: IDEMPOTENCY_KEY_PATTERN,
       validate: {
         validator: (value) => value === undefined || value.length > 0,
         message: "Idempotency key cannot be blank.",

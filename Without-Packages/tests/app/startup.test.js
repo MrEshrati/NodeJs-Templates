@@ -20,6 +20,7 @@ const validEnvironment = {
   OTP_SECRET: "o".repeat(32),
   LOGIN_THROTTLE_SECRET: "l".repeat(32),
   REQUEST_THROTTLE_SECRET: "r".repeat(32),
+  PAYMENT_IDEMPOTENCY_SECRET: "p".repeat(32),
   PAYMENT_PROVIDER: "stripe",
   PAYMENT_FAKE_MODE: "true",
 };

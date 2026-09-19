@@ -155,11 +155,15 @@ test("payment schema enforces text length and idempotency limits", async () => {
   const blankIdempotencyError = await getValidationError(
     createPayment({ idempotencyKey: "   " }),
   );
+  const invalidIdempotencyError = await getValidationError(
+    createPayment({ idempotencyKey: "contains spaces" }),
+  );
 
   assert.ok(externalIdError.errors.externalId);
   assert.ok(descriptionError.errors.description);
   assert.ok(idempotencyLengthError.errors.idempotencyKey);
   assert.ok(blankIdempotencyError.errors.idempotencyKey);
+  assert.ok(invalidIdempotencyError.errors.idempotencyKey);
 
   await assert.doesNotReject(
     createPayment({

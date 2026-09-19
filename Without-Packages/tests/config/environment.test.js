@@ -15,6 +15,7 @@ const validEnvironment = () => ({
   OTP_SECRET: "o".repeat(32),
   LOGIN_THROTTLE_SECRET: "l".repeat(32),
   REQUEST_THROTTLE_SECRET: "r".repeat(32),
+  PAYMENT_IDEMPOTENCY_SECRET: "p".repeat(32),
   PAYMENT_PROVIDER: "stripe",
   PAYMENT_FAKE_MODE: "true",
 });
@@ -29,6 +30,7 @@ const REQUIRED_ENVIRONMENT_NAMES = [
   "OTP_SECRET",
   "LOGIN_THROTTLE_SECRET",
   "REQUEST_THROTTLE_SECRET",
+  "PAYMENT_IDEMPOTENCY_SECRET",
   "PAYMENT_PROVIDER",
   "PAYMENT_FAKE_MODE",
 ];
@@ -269,11 +271,12 @@ test("environment validation rejects short secrets without exposing them", () =>
     "OTP_SECRET",
     "LOGIN_THROTTLE_SECRET",
     "REQUEST_THROTTLE_SECRET",
+    "PAYMENT_IDEMPOTENCY_SECRET",
   ];
 
   for (const name of secretNames) {
     const environment = validEnvironment();
-    const secret = `short-${name}`;
+    const secret = "short-secret";
     environment[name] = secret;
 
     assert.throws(

@@ -1,13 +1,23 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const { fromProject, loadWithMocks } = require("../helpers/module");
 
 const target = fromProject("services", "payment.service.js");
 const paymentModel = fromProject("models", "payment.model.js");
+const paymentCreationModel = fromProject(
+  "models",
+  "paymentCreation.model.js",
+);
 const paymentProviderService = fromProject(
   "services",
   "paymentProvider.service.js",
 );
+const PaymentProviderError = require(
+  fromProject("errors", "PaymentProviderError.js"),
+);
+
+const PAYMENT_IDEMPOTENCY_SECRET = "p".repeat(32);
 
 const createPaymentRecord = (overrides = {}) => ({
   _id: "payment-1",
@@ -21,6 +31,39 @@ const createPaymentRecord = (overrides = {}) => ({
   refundedAmount: 0,
   providerData: { client_secret: "secret-1" },
   idempotencyKey: "order-1",
+  ...overrides,
+});
+
+const createRequestFingerprint = (overrides = {}) => {
+  const input = {
+    version: 1,
+    method: "POST",
+    route: "/create-payment",
+    provider: "stripe",
+    amount: 1099,
+    currency: "USD",
+    description: "Test order",
+    ...overrides,
+  };
+
+  return crypto
+    .createHash("sha256")
+    .update("payment-request-fingerprint:v1\0", "utf8")
+    .update(JSON.stringify(input), "utf8")
+    .digest("hex");
+};
+
+const createCreationClaim = (overrides = {}) => ({
+  _id: "claim-1",
+  user: "user-1",
+  idempotencyKey: "order-1",
+  requestFingerprint: createRequestFingerprint(),
+  provider: "stripe",
+  providerRequestKey: `payment_v1_${"a".repeat(64)}`,
+  status: "succeeded",
+  payment: "payment-1",
+  failureKind: null,
+  failureMessage: null,
   ...overrides,
 });
 
@@ -81,20 +124,28 @@ const createProvider = ({
 
 const loadPaymentService = ({
   findOneResults = [],
+  claimFindOneResults = [],
   createdPayment = createPaymentRecord(),
   createError,
   createDocument,
+  claimCreateError,
+  claimCreateDocument,
   updatedPayment = createPaymentRecord({ status: "succeeded" }),
   defaultProvider = createProvider().paymentProvider,
 } = {}) => {
   const calls = {
     init: 0,
+    claimInit: 0,
     findOne: [],
+    claimFindOne: [],
     create: [],
+    claimCreate: [],
+    claimUpdate: [],
     toObject: 0,
     findOneAndUpdate: [],
   };
   const queuedFindOneResults = [...findOneResults];
+  const queuedClaimFindOneResults = [...claimFindOneResults];
   const service = loadWithMocks(target, {
     [paymentModel]: {
       async init() {
@@ -141,6 +192,43 @@ const loadPaymentService = ({
         };
       },
     },
+    [paymentCreationModel]: {
+      async init() {
+        calls.claimInit += 1;
+      },
+      findOne(filter) {
+        const call = { filter, lean: false };
+        calls.claimFindOne.push(call);
+
+        return {
+          async lean() {
+            call.lean = true;
+            return queuedClaimFindOneResults.shift() ?? null;
+          },
+        };
+      },
+      async create(data) {
+        calls.claimCreate.push(data);
+
+        if (claimCreateError) {
+          throw claimCreateError;
+        }
+
+        if (claimCreateDocument !== undefined) {
+          return claimCreateDocument;
+        }
+
+        return {
+          toObject() {
+            return { _id: "claim-1", ...data };
+          },
+        };
+      },
+      async updateOne(filter, update, options) {
+        calls.claimUpdate.push({ filter, update, options });
+        return { acknowledged: true, matchedCount: 1, modifiedCount: 1 };
+      },
+    },
     [paymentProviderService]: {
       getConfiguredPaymentProvider() {
         return defaultProvider;
@@ -151,7 +239,7 @@ const loadPaymentService = ({
   return { calls, service };
 };
 
-test("payment creation persists provider data and returns checkout data", async () => {
+test("payment creation claims the request before calling the provider", async () => {
   const { calls: providerCalls, paymentProvider } = createProvider();
   const { calls, service } = loadPaymentService({ findOneResults: [null] });
   const input = {
@@ -162,69 +250,162 @@ test("payment creation persists provider data and returns checkout data", async 
     idempotencyKey: "order-1",
   };
 
-  assert.deepEqual(
-    await service.createPayment(input, { paymentProvider }),
-    {
-      status: "created",
-      payment: createPaymentRecord(),
-      checkout: {
-        clientSecret: "secret-1",
-        publishableKey: "pk_test_1",
-      },
-    },
-  );
+  const result = await service.createPayment(input, {
+    paymentProvider,
+    idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET,
+  });
+
+  assert.equal(result.status, "created");
   assert.equal(calls.init, 1);
-  assert.deepEqual(calls.findOne[0], {
-    filter: { user: "user-1", idempotencyKey: "order-1" },
-    lean: true,
+  assert.equal(calls.claimInit, 1);
+  assert.equal(calls.claimCreate.length, 1);
+  assert.equal(calls.claimCreate[0].status, "processing");
+  assert.match(calls.claimCreate[0].requestFingerprint, /^[a-f0-9]{64}$/);
+  assert.match(
+    calls.claimCreate[0].providerRequestKey,
+    /^payment_v1_[a-f0-9]{64}$/,
+  );
+  assert.notEqual(calls.claimCreate[0].providerRequestKey, "order-1");
+  assert.equal(providerCalls.createPayment.length, 1);
+  assert.equal(
+    providerCalls.createPayment[0].idempotencyKey,
+    calls.claimCreate[0].providerRequestKey,
+  );
+  assert.deepEqual(calls.create[0], {
+    user: "user-1",
+    provider: "stripe",
+    externalId: "pi_test_1",
+    amount: 1099,
+    currency: "USD",
+    providerData: { client_secret: "secret-1" },
+    description: "Test order",
+    idempotencyKey: "order-1",
   });
-  assert.deepEqual(providerCalls.createPayment, [
-    {
-      amount: 1099,
-      currency: "USD",
-      description: "Test order",
-      idempotencyKey: "order-1",
-    },
-  ]);
-  assert.deepEqual(calls.create, [
-    {
-      user: "user-1",
-      provider: "stripe",
-      externalId: "pi_test_1",
-      amount: 1099,
-      currency: "USD",
-      providerData: { client_secret: "secret-1" },
-      description: "Test order",
-      idempotencyKey: "order-1",
-    },
-  ]);
-  assert.equal(calls.toObject, 1);
-  assert.deepEqual(providerCalls.getCheckout, [createPaymentRecord()]);
+  assert.equal(calls.claimUpdate[0].update.$set.status, "succeeded");
+  assert.equal(calls.claimUpdate[0].update.$set.payment, "payment-1");
 });
 
-test("payment creation omits absent optional persistence fields", async () => {
-  const { paymentProvider } = createProvider();
-  const createdPayment = createPaymentRecord({
-    description: undefined,
-    idempotencyKey: undefined,
-  });
-  const { calls, service } = loadPaymentService({ createdPayment });
+test("provider idempotency keys are scoped to the authenticated user", async () => {
+  const { calls: providerCalls, paymentProvider } = createProvider();
 
+  for (const userId of ["user-1", "user-2"]) {
+    const { service } = loadPaymentService({
+      findOneResults: [null],
+      createdPayment: createPaymentRecord({ user: userId }),
+    });
+
+    await service.createPayment(
+      {
+        userId,
+        amount: 1099,
+        currency: "USD",
+        description: "Test order",
+        idempotencyKey: "shared-client-key",
+      },
+      { paymentProvider, idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
+    );
+  }
+
+  assert.equal(providerCalls.createPayment.length, 2);
+  assert.notEqual(
+    providerCalls.createPayment[0].idempotencyKey,
+    providerCalls.createPayment[1].idempotencyKey,
+  );
+});
+
+test("payment creation requires an idempotency key and accepts no description", async () => {
+  const { paymentProvider } = createProvider();
+  const missingKey = loadPaymentService();
+
+  await assert.rejects(
+    missingKey.service.createPayment(
+      { userId: "user-1", amount: 1099, currency: "USD" },
+      {
+        paymentProvider,
+        idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET,
+      },
+    ),
+    /idempotencyKey must be a non-empty string/,
+  );
+  assert.equal(missingKey.calls.init, 0);
+
+  const createdPayment = createPaymentRecord({ description: undefined });
+  const { calls, service } = loadPaymentService({
+    findOneResults: [null],
+    createdPayment,
+  });
   await service.createPayment(
-    { userId: "user-1", amount: 1099, currency: "USD" },
-    { paymentProvider },
+    {
+      userId: "user-1",
+      amount: 1099,
+      currency: "USD",
+      idempotencyKey: "order-1",
+    },
+    { paymentProvider, idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
   );
 
-  assert.equal(calls.findOne.length, 0);
   assert.equal(Object.hasOwn(calls.create[0], "description"), false);
-  assert.equal(Object.hasOwn(calls.create[0], "idempotencyKey"), false);
+  assert.equal(calls.create[0].idempotencyKey, "order-1");
 });
 
-test("idempotent payment creation reuses the existing payment", async () => {
+test("a completed idempotency claim replays the stored payment", async () => {
   const existingPayment = createPaymentRecord();
   const { calls: providerCalls, paymentProvider } = createProvider();
   const { calls, service } = loadPaymentService({
+    claimFindOneResults: [createCreationClaim()],
     findOneResults: [existingPayment],
+  });
+
+  const result = await service.createPayment(
+    {
+      userId: "user-1",
+      amount: 1099,
+      currency: "USD",
+      description: "Test order",
+      idempotencyKey: "order-1",
+    },
+    { paymentProvider, idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
+  );
+
+  assert.equal(result.status, "existing");
+  assert.equal(result.payment, existingPayment);
+  assert.equal(calls.claimCreate.length, 0);
+  assert.equal(calls.create.length, 0);
+  assert.equal(providerCalls.createPayment.length, 0);
+});
+
+test("an idempotency key cannot be reused for different payment details", async () => {
+  const { calls: providerCalls, paymentProvider } = createProvider();
+  const { calls, service } = loadPaymentService({
+    claimFindOneResults: [createCreationClaim()],
+  });
+
+  assert.deepEqual(
+    await service.createPayment(
+      {
+        userId: "user-1",
+        amount: 2200,
+        currency: "USD",
+        description: "Test order",
+        idempotencyKey: "order-1",
+      },
+      { paymentProvider, idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
+    ),
+    { status: "conflict" },
+  );
+  assert.equal(calls.findOne.length, 0);
+  assert.equal(providerCalls.createPayment.length, 0);
+});
+
+test("a claimed request remains in progress until a payment is stored", async () => {
+  const processingClaim = createCreationClaim({
+    status: "processing",
+    payment: null,
+  });
+  const { calls: providerCalls, paymentProvider } = createProvider();
+  const { service } = loadPaymentService({
+    claimFindOneResults: [processingClaim],
+    findOneResults: [null],
   });
 
   assert.deepEqual(
@@ -233,31 +414,24 @@ test("idempotent payment creation reuses the existing payment", async () => {
         userId: "user-1",
         amount: 1099,
         currency: "USD",
+        description: "Test order",
         idempotencyKey: "order-1",
       },
-      { paymentProvider },
+      { paymentProvider, idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
     ),
-    {
-      status: "existing",
-      payment: existingPayment,
-      checkout: {
-        clientSecret: "secret-1",
-        publishableKey: "pk_test_1",
-      },
-    },
+    { status: "processing" },
   );
-  assert.equal(calls.create.length, 0);
   assert.equal(providerCalls.createPayment.length, 0);
-  assert.deepEqual(providerCalls.getCheckout, [existingPayment]);
 });
 
-test("duplicate idempotency races reload the winning payment", async () => {
-  const duplicateError = Object.assign(new Error("duplicate"), { code: 11000 });
+test("a processing claim recovers a payment stored before interruption", async () => {
   const existingPayment = createPaymentRecord();
   const { paymentProvider } = createProvider();
   const { calls, service } = loadPaymentService({
-    findOneResults: [null, existingPayment],
-    createError: duplicateError,
+    claimFindOneResults: [
+      createCreationClaim({ status: "processing", payment: null }),
+    ],
+    findOneResults: [existingPayment],
   });
 
   const result = await service.createPayment(
@@ -265,43 +439,117 @@ test("duplicate idempotency races reload the winning payment", async () => {
       userId: "user-1",
       amount: 1099,
       currency: "USD",
+      description: "Test order",
       idempotencyKey: "order-1",
     },
-    { paymentProvider },
+    { paymentProvider, idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
   );
 
   assert.equal(result.status, "existing");
-  assert.equal(result.payment, existingPayment);
-  assert.equal(calls.findOne.length, 2);
-  assert.deepEqual(calls.findOne[1].filter, {
-    user: "user-1",
-    idempotencyKey: "order-1",
-  });
+  assert.equal(calls.claimUpdate[0].update.$set.status, "succeeded");
 });
 
-test("payment creation preserves database errors that cannot be recovered", async () => {
-  const cases = [
-    {
-      error: Object.assign(new Error("duplicate without winner"), {
-        code: 11000,
-      }),
-      findOneResults: [null, null],
-      idempotencyKey: "order-1",
-      expectedFindCount: 2,
-    },
-    {
-      error: Object.assign(new Error("database unavailable"), { code: 91 }),
-      findOneResults: [],
-      idempotencyKey: undefined,
-      expectedFindCount: 0,
-    },
-  ];
+test("provider failures are persisted and replayed without a second call", async () => {
+  const providerError = new PaymentProviderError(
+    "Payment provider is unavailable.",
+    { provider: "stripe", kind: "unreachable" },
+  );
+  const { calls: providerCalls, paymentProvider } = createProvider();
+  paymentProvider.createPayment = async (input) => {
+    providerCalls.createPayment.push(input);
+    throw providerError;
+  };
+  const first = loadPaymentService({ findOneResults: [null] });
 
-  for (const current of cases) {
+  await assert.rejects(
+    first.service.createPayment(
+      {
+        userId: "user-1",
+        amount: 1099,
+        currency: "USD",
+        description: "Test order",
+        idempotencyKey: "order-1",
+      },
+      { paymentProvider, idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
+    ),
+    (error) => error === providerError,
+  );
+  assert.equal(first.calls.claimUpdate[0].update.$set.status, "failed");
+  assert.equal(
+    first.calls.claimUpdate[0].update.$set.failureKind,
+    "unreachable",
+  );
+
+  const replayProvider = createProvider();
+  const replay = loadPaymentService({
+    claimFindOneResults: [
+      createCreationClaim({
+        status: "failed",
+        payment: null,
+        failureKind: "unreachable",
+        failureMessage: "Payment provider is unavailable.",
+      }),
+    ],
+  });
+  await assert.rejects(
+    replay.service.createPayment(
+      {
+        userId: "user-1",
+        amount: 1099,
+        currency: "USD",
+        description: "Test order",
+        idempotencyKey: "order-1",
+      },
+      {
+        paymentProvider: replayProvider.paymentProvider,
+        idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET,
+      },
+    ),
+    (error) =>
+      error instanceof PaymentProviderError &&
+      error.kind === "unreachable",
+  );
+  assert.equal(replayProvider.calls.createPayment.length, 0);
+});
+
+test("a duplicate claim observes the winning request without calling the provider", async () => {
+  const duplicateError = Object.assign(new Error("duplicate"), { code: 11000 });
+  const { calls: providerCalls, paymentProvider } = createProvider();
+  const { service } = loadPaymentService({
+    claimFindOneResults: [
+      null,
+      createCreationClaim({ status: "processing", payment: null }),
+    ],
+    findOneResults: [null, null],
+    claimCreateError: duplicateError,
+  });
+
+  assert.deepEqual(
+    await service.createPayment(
+      {
+        userId: "user-1",
+        amount: 1099,
+        currency: "USD",
+        description: "Test order",
+        idempotencyKey: "order-1",
+      },
+      { paymentProvider, idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
+    ),
+    { status: "processing" },
+  );
+  assert.equal(providerCalls.createPayment.length, 0);
+});
+
+test("payment creation preserves unrecoverable claim database errors", async () => {
+  for (const current of [
+    Object.assign(new Error("duplicate without winner"), { code: 11000 }),
+    Object.assign(new Error("database unavailable"), { code: 91 }),
+  ]) {
     const { paymentProvider } = createProvider();
-    const { calls, service } = loadPaymentService({
-      findOneResults: current.findOneResults,
-      createError: current.error,
+    const { service } = loadPaymentService({
+      claimFindOneResults: [null, null],
+      findOneResults: [null],
+      claimCreateError: current,
     });
 
     await assert.rejects(
@@ -310,47 +558,56 @@ test("payment creation preserves database errors that cannot be recovered", asyn
           userId: "user-1",
           amount: 1099,
           currency: "USD",
-          idempotencyKey: current.idempotencyKey,
+          description: "Test order",
+          idempotencyKey: "order-1",
         },
-        { paymentProvider },
+        { paymentProvider, idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
       ),
-      (error) => error === current.error,
+      (error) => error === current,
     );
-    assert.equal(calls.findOne.length, current.expectedFindCount);
   }
 });
 
 test("payment creation rejects invalid provider contracts and results", async () => {
-  const invalidProvider = {
-    provider: "stripe",
-    getCheckout() {},
-  };
+  const invalidProvider = { provider: "stripe", getCheckout() {} };
   const invalidContract = loadPaymentService();
 
   await assert.rejects(
     invalidContract.service.createPayment(
-      { userId: "user-1", amount: 1099, currency: "USD" },
-      { paymentProvider: invalidProvider },
+      {
+        userId: "user-1",
+        amount: 1099,
+        currency: "USD",
+        idempotencyKey: "order-1",
+      },
+      {
+        paymentProvider: invalidProvider,
+        idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET,
+      },
     ),
     /paymentProvider must implement the payment contract/,
   );
   assert.equal(invalidContract.calls.init, 0);
 
-  const invalidResults = [
+  for (const createResult of [
     null,
     { externalId: "", providerData: {} },
     { externalId: "x".repeat(256), providerData: {} },
     { externalId: "pi_test_1", providerData: [] },
-  ];
-
-  for (const createResult of invalidResults) {
+  ]) {
     const { paymentProvider } = createProvider({ createResult });
-    const { service } = loadPaymentService();
+    const { service } = loadPaymentService({ findOneResults: [null] });
 
     await assert.rejects(
       service.createPayment(
-        { userId: "user-1", amount: 1099, currency: "USD" },
-        { paymentProvider },
+        {
+          userId: "user-1",
+          amount: 1099,
+          currency: "USD",
+          description: "Test order",
+          idempotencyKey: "order-1",
+        },
+        { paymentProvider, idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
       ),
       /Unexpected payment provider result/,
     );
@@ -359,45 +616,143 @@ test("payment creation rejects invalid provider contracts and results", async ()
 
 test("payment creation rejects invalid storage and provider mismatches", async () => {
   const { paymentProvider } = createProvider();
-  const invalidStorage = loadPaymentService({ createDocument: {} });
+  const invalidStorage = loadPaymentService({
+    findOneResults: [null],
+    createDocument: {},
+  });
 
   await assert.rejects(
     invalidStorage.service.createPayment(
-      { userId: "user-1", amount: 1099, currency: "USD" },
-      { paymentProvider },
+      {
+        userId: "user-1",
+        amount: 1099,
+        currency: "USD",
+        description: "Test order",
+        idempotencyKey: "order-1",
+      },
+      { paymentProvider, idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
     ),
     /Unexpected payment creation result/,
   );
 
   const providerMismatch = loadPaymentService({
-    findOneResults: [createPaymentRecord({ provider: "zarinpal" })],
+    claimFindOneResults: [
+      createCreationClaim({ provider: "zarinpal" }),
+    ],
   });
-
-  await assert.rejects(
-    providerMismatch.service.createPayment(
+  assert.deepEqual(
+    await providerMismatch.service.createPayment(
       {
         userId: "user-1",
         amount: 1099,
         currency: "USD",
+        description: "Test order",
         idempotencyKey: "order-1",
       },
-      { paymentProvider },
+      { paymentProvider, idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
     ),
-    /Existing payment does not match the configured provider/,
+    { status: "conflict" },
   );
 });
 
 test("payment creation can use the configured default provider", async () => {
   const { calls: providerCalls, paymentProvider } = createProvider();
-  const { service } = loadPaymentService({ defaultProvider: paymentProvider });
+  const { service } = loadPaymentService({
+    defaultProvider: paymentProvider,
+    findOneResults: [null],
+  });
 
-  const result = await service.createPayment({
+  const result = await service.createPayment(
+    {
+      userId: "user-1",
+      amount: 1099,
+      currency: "USD",
+      description: "Test order",
+      idempotencyKey: "order-1",
+    },
+    { idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET },
+  );
+
+  assert.equal(result.status, "created");
+  assert.equal(providerCalls.createPayment.length, 1);
+});
+
+test("concurrent matching requests produce only one provider side effect", async () => {
+  const state = { claim: null, payment: null };
+  let releaseProvider;
+  let reportProviderStarted;
+  const providerGate = new Promise((resolve) => {
+    releaseProvider = resolve;
+  });
+  const providerStarted = new Promise((resolve) => {
+    reportProviderStarted = resolve;
+  });
+  const { calls: providerCalls, paymentProvider } = createProvider();
+  paymentProvider.createPayment = async (input) => {
+    providerCalls.createPayment.push(input);
+    reportProviderStarted();
+    await providerGate;
+    return {
+      externalId: "pi_test_1",
+      providerData: { client_secret: "secret-1" },
+    };
+  };
+
+  const service = loadWithMocks(target, {
+    [paymentModel]: {
+      async init() {},
+      findOne() {
+        return { lean: async () => state.payment };
+      },
+      async create(data) {
+        state.payment = createPaymentRecord(data);
+        return { toObject: () => state.payment };
+      },
+    },
+    [paymentCreationModel]: {
+      async init() {},
+      findOne() {
+        return { lean: async () => state.claim };
+      },
+      async create(data) {
+        if (state.claim) {
+          throw Object.assign(new Error("duplicate"), { code: 11000 });
+        }
+
+        state.claim = { _id: "claim-1", ...data };
+        return { toObject: () => state.claim };
+      },
+      async updateOne(_filter, update) {
+        state.claim = { ...state.claim, ...update.$set };
+        return { acknowledged: true, matchedCount: 1, modifiedCount: 1 };
+      },
+    },
+    [paymentProviderService]: {
+      getConfiguredPaymentProvider() {
+        return paymentProvider;
+      },
+    },
+  });
+  const input = {
     userId: "user-1",
     amount: 1099,
     currency: "USD",
-  });
+    description: "Test order",
+    idempotencyKey: "order-1",
+  };
+  const options = {
+    paymentProvider,
+    idempotencySecret: PAYMENT_IDEMPOTENCY_SECRET,
+  };
 
-  assert.equal(result.status, "created");
+  const winner = service.createPayment(input, options);
+  await providerStarted;
+  const concurrentReplay = await service.createPayment(input, options);
+  releaseProvider();
+  const winnerResult = await winner;
+
+  assert.equal(winnerResult.status, "created");
+  assert.deepEqual(concurrentReplay, { status: "processing" });
   assert.equal(providerCalls.createPayment.length, 1);
 });
 

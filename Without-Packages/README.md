@@ -89,6 +89,7 @@ request or inactive socket, and 5 seconds for an idle keep-alive connection.
 | `OTP_SECRET` | HMAC secret for OTP codes; at least 32 UTF-8 bytes. |
 | `LOGIN_THROTTLE_SECRET` | HMAC secret used to protect login-throttle identifiers; at least 32 UTF-8 bytes. |
 | `REQUEST_THROTTLE_SECRET` | HMAC secret used to protect request-throttle identifiers; at least 32 UTF-8 bytes. |
+| `PAYMENT_IDEMPOTENCY_SECRET` | HMAC secret used to derive user-scoped provider idempotency keys; at least 32 UTF-8 bytes. |
 | `PAYMENT_PROVIDER` | Active payment integration: `stripe` or `zarinpal`. |
 | `PAYMENT_FAKE_MODE` | Strict `true` or `false`; enables development payment simulation when true. |
 | `STRIPE_SECRET_KEY` | Stripe server credential required for live Stripe payments. |
@@ -264,16 +265,19 @@ requires a server restart.
 
 | Endpoint | Availability | Body | Result |
 | --- | --- | --- | --- |
-| `POST /create-payment` | Fake and live modes | `amount`, `currency`, optional `description`, optional `idempotency_key` | Creates a provider checkout with `201 Created`, or returns the existing checkout with `200 OK` when the idempotency key was already used. |
+| `POST /create-payment` | Fake and live modes | `amount`, `currency`, `idempotency_key`, optional `description` | Creates a provider checkout with `201 Created`, or returns the existing checkout with `200 OK` when the idempotency key was already used. |
 | `POST /dev/simulate` | Only when `PAYMENT_FAKE_MODE=true` | `payment_id`, `outcome` | Applies a fake provider outcome and returns the serialized payment. |
 
 `amount` is always a positive safe integer. Stripe accepts `USD`, with the
 amount expressed in USD cents: `1099` means `$10.99`. ZarinPal accepts `IRR`,
 with the amount expressed as whole IRR: `50000` means `50000` IRR.
-`description` is limited to 500 characters and `idempotency_key` to 255
-characters. Use one idempotency key for one logical payment and never reuse it
-for a different order. Repeating the same authenticated user's request with the
-same key does not create another database payment or provider request.
+`description` is limited to 500 characters. The required `idempotency_key` is
+limited to 255 URL-safe characters. Use one idempotency key for one logical
+payment and never reuse it for different payment details. The API atomically
+claims the user-scoped key before contacting the provider. A matching replay
+returns the stored checkout, a changed request returns
+`409 idempotency_conflict`, and an unfinished request returns
+`409 payment_in_progress` without making another provider request.
 
 A Stripe checkout response contains only the internal payment identifier and
 the browser-safe Stripe values:

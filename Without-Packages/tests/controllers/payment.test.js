@@ -152,6 +152,43 @@ test("create-payment controller returns 200 for an idempotent replay", async () 
   });
 });
 
+test("create-payment controller reports idempotency conflicts and in-progress requests", async () => {
+  for (const [status, expected] of [
+    [
+      "conflict",
+      {
+        code: "idempotency_conflict",
+        message:
+          "Idempotency key was already used with different payment details.",
+      },
+    ],
+    [
+      "processing",
+      {
+        code: "payment_in_progress",
+        message: "Payment creation is still processing.",
+      },
+    ],
+  ]) {
+    const { controller, state } = loadController();
+    state.createResult = { status };
+
+    const { forwarded, res } = await invoke(controller.createPayment, {
+      user: { _id: "user-1" },
+      validatedBody: {
+        amount: 1099,
+        currency: "USD",
+        idempotencyKey: "order-1",
+      },
+    });
+
+    assert.equal(forwarded.statusCode, 409);
+    assert.equal(forwarded.code, expected.code);
+    assert.equal(forwarded.message, expected.message);
+    assert.equal(res.statusCode, null);
+  }
+});
+
 test("create-payment controller returns a ZarinPal redirect", async () => {
   const { calls, controller, state } = loadController();
   state.createResult = {
@@ -172,6 +209,7 @@ test("create-payment controller returns a ZarinPal redirect", async () => {
     validatedBody: {
       amount: 50000,
       currency: "IRR",
+      idempotencyKey: "order-2",
     },
   });
 
@@ -181,6 +219,7 @@ test("create-payment controller returns a ZarinPal redirect", async () => {
       userId: "user-2",
       amount: 50000,
       currency: "IRR",
+      idempotencyKey: "order-2",
     },
   ]);
   assert.equal(res.statusCode, 201);
