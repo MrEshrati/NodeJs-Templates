@@ -1,0 +1,62 @@
+name: Prepare reviewed dependency locks
+
+on:
+  push:
+    branches:
+      - dependabot/npm_and_yarn/nodemailer-10.1.7
+    paths:
+      - .github/workflows/prepare-pr-locks.yml
+
+permissions:
+  contents: read
+
+jobs:
+  locks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Resolve and audit the reviewed dependency locks
+        shell: bash
+        run: |
+          node <<'NODE'
+          const { mkdtempSync, writeFileSync, readFileSync } = require("node:fs");
+          const { tmpdir } = require("node:os");
+          const { join } = require("node:path");
+          const { spawnSync } = require("node:child_process");
+          const refs = [{"number":18,"sha":"20da15acad05f204e2e34eae0a02a58eea5aeec2"},{"number":15,"sha":"70abb7ac4f153837459b869ac0882649f535262b"},{"number":17,"sha":"2b25ee549b49e5ddc3453928aabe9ac900793aca"},{"number":19,"sha":"e7e6f2863e3f7ffe700f9117e13b67968c6f5379"},{"number":20,"sha":"d664d91472d95d70aa67c5fc6df053bfd3d4eb1b"}];
+          const repository = "MrEshrati/NodeJs-Templates";
+          const runNpm = (cwd, args) => {
+            const result = spawnSync("npm", args, { cwd, encoding: "utf8", timeout: 120000 });
+            process.stdout.write(result.stdout || "");
+            process.stderr.write(result.stderr || "");
+            if (result.error || result.status !== 0) {
+              throw result.error || new Error("npm failed with status " + result.status);
+            }
+          };
+          const readJson = async (sha, path) => {
+            const response = await fetch("https://raw.githubusercontent.com/" + repository + "/" + sha + "/" + path, { signal: AbortSignal.timeout(30000) });
+            if (!response.ok) throw new Error("Could not read " + path + ": " + response.status);
+            return response.json();
+          };
+          (async () => {
+            for (const ref of refs) {
+              const cwd = mkdtempSync(join(tmpdir(), "node-api-lock-"));
+              const [pkg, lock] = await Promise.all([readJson(ref.sha, "package.json"), readJson(ref.sha, "package-lock.json")]);
+              pkg.dependencies.nodemailer = "^10.1.7";
+              writeFileSync(join(cwd, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
+              writeFileSync(join(cwd, "package-lock.json"), JSON.stringify(lock, null, 2) + "\n");
+              runNpm(cwd, ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"]);
+              runNpm(cwd, ["update", "body-parser", "proxy-addr", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"]);
+              runNpm(cwd, ["audit", "--omit=dev", "--audit-level=high"]);
+              const result = {
+                package: readFileSync(join(cwd, "package.json"), "utf8"),
+                lock: readFileSync(join(cwd, "package-lock.json"), "utf8")
+              };
+              console.log("PR_LOCK_" + ref.number + "=" + Buffer.from(JSON.stringify(result)).toString("base64"));
+            }
+          })().catch(error => { console.error(error); process.exitCode = 1; });
+          NODE
