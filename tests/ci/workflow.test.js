@@ -25,6 +25,9 @@ test("CI runs locked Node.js 24 tests and the production audit", () => {
 });
 
 test("CI runs database workflows against a guarded MongoDB replica set", () => {
+  const databaseJob = workflow.slice(workflow.indexOf("\n  e2e:"));
+
+  assert.match(databaseJob, /runs-on:\s*ubuntu-24\.04/);
   assert.match(workflow, /mongo:8\.0/);
   assert.match(workflow, /--replSet rs0/);
   assert.match(
