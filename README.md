@@ -52,8 +52,9 @@ Create the local environment file:
 Copy-Item .env.example .env
 ```
 
-Replace `GOOGLE_CLIENT_ID` and the four account-secret placeholders. Generate a
-different value for each account secret:
+Replace `GOOGLE_CLIENT_ID` and all five account-secret placeholders:
+`JWT_SECRET`, `OTP_SECRET`, `LOGIN_THROTTLE_SECRET`, `REQUEST_THROTTLE_SECRET`,
+and `PAYMENT_IDEMPOTENCY_SECRET`. Generate a different value for each secret:
 
 ```powershell
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"

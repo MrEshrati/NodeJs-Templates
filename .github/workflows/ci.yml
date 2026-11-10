@@ -69,8 +69,12 @@ jobs:
             --replSet rs0 \
             --bind_ip_all
 
+          # Probe the TCP listener before starting mongosh: its telemetry files
+          # can otherwise race the entrypoint's initial ownership scan.
           for attempt in {1..30}; do
             if docker exec node-api-mongodb \
+              bash -c 'true > /dev/tcp/127.0.0.1/27017' > /dev/null 2>&1 && \
+              docker exec node-api-mongodb \
               mongosh --quiet --eval \
               'quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)' > /dev/null 2>&1; then
               break
