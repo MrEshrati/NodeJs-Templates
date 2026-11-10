@@ -39,7 +39,7 @@ jobs:
 
   e2e:
     name: MongoDB workflows
-    # MongoDB 8.0 cannot start on Linux 6.19+ (SERVER-121912).
+    # Keep the CI runner image stable across ubuntu-latest updates.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
 
@@ -57,10 +57,13 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      # Let glibc register rseq so MongoDB uses per-thread allocator caches.
+      # This avoids the per-CPU cache incompatibility in SERVER-121912.
       - name: Start MongoDB replica set
         run: |
           docker run --detach \
             --name node-api-mongodb \
+            --env GLIBC_TUNABLES=glibc.pthread.rseq=1 \
             --publish 27017:27017 \
             mongo:8.0 \
             --replSet rs0 \
